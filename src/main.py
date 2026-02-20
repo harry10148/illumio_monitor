@@ -1,35 +1,87 @@
 import sys
 import os
+import signal
+import time
 import logging
+import argparse
 from src import __version__
-from src.utils import setup_logger
+from src.utils import setup_logger, Colors, safe_input
 from src.config import ConfigManager
 from src.api_client import ApiClient
 from src.analyzer import Analyzer
 from src.reporter import Reporter
-from src.utils import Colors, safe_input
 from src.settings import (
-    settings_menu, 
-    add_event_menu, 
-    add_traffic_menu, 
-    add_bandwidth_volume_menu, 
+    settings_menu,
+    add_event_menu,
+    add_traffic_menu,
+    add_bandwidth_volume_menu,
     manage_rules_menu
 )
 from src.i18n import t
 
+logger = logging.getLogger(__name__)
+
+# ─── Daemon / Monitor Loop ───────────────────────────────────────────────────
+
+_shutdown_requested = False
+
+
+def _signal_handler(signum, frame):
+    global _shutdown_requested
+    _shutdown_requested = True
+    logger.info(f"Received signal {signum}. Shutting down gracefully...")
+
+
+def run_daemon_loop(interval_minutes: int):
+    """Headless monitoring loop. Runs analysis at fixed intervals until stopped."""
+    global _shutdown_requested
+    _shutdown_requested = False
+
+    signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGTERM, _signal_handler)
+
+    cm = ConfigManager()
+    logger.info(f"Starting daemon loop (interval={interval_minutes}m)")
+    print(f"Illumio PCE Monitor v{__version__} — daemon mode (interval={interval_minutes}m)")
+    print("Press Ctrl+C or send SIGTERM to stop.")
+
+    while not _shutdown_requested:
+        try:
+            logger.info("=== Starting monitoring cycle ===")
+            api = ApiClient(cm)
+            rep = Reporter(cm)
+            ana = Analyzer(cm, api, rep)
+            ana.run_analysis()
+            rep.send_alerts()
+            logger.info("=== Monitoring cycle completed ===")
+        except Exception as e:
+            logger.error(f"Error in monitoring cycle: {e}", exc_info=True)
+
+        # Sleep in small increments so we can respond to shutdown quickly
+        sleep_seconds = interval_minutes * 60
+        for _ in range(sleep_seconds):
+            if _shutdown_requested:
+                break
+            time.sleep(1)
+
+    logger.info("Daemon loop stopped.")
+    print("\nDaemon stopped.")
+
+
+# ─── Interactive CLI Menu ─────────────────────────────────────────────────────
+
 def main_menu():
     # Setup Logging
-    # Root dir is the parent of the package directory (illumio_monitor)
     PKG_DIR = os.path.dirname(os.path.abspath(__file__))
-    ROOT_DIR = os.path.dirname(PKG_DIR) 
+    ROOT_DIR = os.path.dirname(PKG_DIR)
     LOG_DIR = os.path.join(ROOT_DIR, 'logs')
     LOG_FILE = os.path.join(LOG_DIR, 'illumio_monitor.log')
-    
-    logger = setup_logger('illumio_monitor', LOG_FILE)
+
+    setup_logger('illumio_monitor', LOG_FILE)
     logger.info(f"Starting Illumio PCE Monitor v{__version__}")
 
     cm = ConfigManager()
-    
+
     while True:
         os.system('cls' if os.name == 'nt' else 'clear')
         print(f"{Colors.HEADER}=== Illumio PCE Monitor ==={Colors.ENDC}")
@@ -46,16 +98,22 @@ def main_menu():
         print(t('main_menu_9'))
         print(t('main_menu_10').replace('{Colors.CYAN}', Colors.CYAN).replace('{Colors.ENDC}', Colors.ENDC))
         print(t('main_menu_0'))
-        
+
         sel = safe_input(f"\n{t('please_select')}", int, range(0, 11))
-        
-        if sel == 0: break
-        elif sel == 1: add_event_menu(cm)
-        elif sel == 2: add_traffic_menu(cm)
-        elif sel == 3: add_bandwidth_volume_menu(cm)
-        elif sel == 4: manage_rules_menu(cm)
-        elif sel == 5: settings_menu(cm)
-        elif sel == 6: 
+
+        if sel == 0:
+            break
+        elif sel == 1:
+            add_event_menu(cm)
+        elif sel == 2:
+            add_traffic_menu(cm)
+        elif sel == 3:
+            add_bandwidth_volume_menu(cm)
+        elif sel == 4:
+            manage_rules_menu(cm)
+        elif sel == 5:
+            settings_menu(cm)
+        elif sel == 6:
             print(f"\n{Colors.WARNING}{t('warning_best_practice')}{Colors.ENDC}")
             confirm = safe_input(t('confirm_best_practice'), str)
             if confirm == 'YES':
@@ -63,7 +121,7 @@ def main_menu():
                 input(t('best_practice_loaded'))
             else:
                 input(t('operation_cancelled'))
-        elif sel == 7: 
+        elif sel == 7:
             Reporter(cm).send_alerts(force_test=True)
             input(t('done_msg'))
         elif sel == 8:
@@ -80,17 +138,61 @@ def main_menu():
             ana.run_debug_mode()
             input(t('debug_done'))
         elif sel == 10:
-            from src.web_gui.app import init_app, start_server
-            import threading
-            print(f"\n{Colors.CYAN}Preparing to start Web GUI...{Colors.ENDC}")
-            port = safe_input("Bind Port [8080]", int, allow_cancel=True) or 8080
-            init_app(cm)
+            # Launch tkinter GUI from console menu
             try:
-                print(f"{Colors.WARNING}Press Ctrl+C to stop the Web GUI and return to CLI.{Colors.ENDC}")
-                start_server("0.0.0.0", port)
-            except KeyboardInterrupt:
-                print(f"\n{Colors.GREEN}Web GUI stopped. Returning to menu...{Colors.ENDC}")
+                from src.gui import launch_gui
+                launch_gui(cm)
+            except ImportError as e:
+                print(f"{Colors.FAIL}GUI not available: {e}{Colors.ENDC}")
+                input(t('press_enter_to_continue'))
+
+
+# ─── Entry Point ──────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=f"Illumio PCE Monitor v{__version__}",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  python illumio_monitor.py                  # Interactive CLI menu\n"
+            "  python illumio_monitor.py --monitor        # Headless daemon mode\n"
+            "  python illumio_monitor.py --monitor -i 5   # Daemon with 5-min interval\n"
+            "  python illumio_monitor.py --gui            # Launch tkinter GUI\n"
+        )
+    )
+    parser.add_argument('--monitor', action='store_true',
+                        help='Run in headless daemon mode (no interactive menu)')
+    parser.add_argument('-i', '--interval', type=int, default=10,
+                        help='Monitoring interval in minutes (default: 10)')
+    parser.add_argument('--gui', action='store_true',
+                        help='Launch the tkinter GUI')
+
+    args = parser.parse_args()
+
+    # Setup logging early for all modes
+    PKG_DIR = os.path.dirname(os.path.abspath(__file__))
+    ROOT_DIR = os.path.dirname(PKG_DIR)
+    LOG_DIR = os.path.join(ROOT_DIR, 'logs')
+    LOG_FILE = os.path.join(LOG_DIR, 'illumio_monitor.log')
+    setup_logger('illumio_monitor', LOG_FILE)
+
+    if args.monitor:
+        run_daemon_loop(args.interval)
+    elif args.gui:
+        try:
+            from src.gui import launch_gui
+            cm = ConfigManager()
+            launch_gui(cm)
+        except ImportError as e:
+            print(f"GUI module not available: {e}")
+            sys.exit(1)
+    else:
+        try:
+            main_menu()
+        except KeyboardInterrupt:
+            print(f"\n{t('bye_msg')}")
+
 
 if __name__ == "__main__":
-    try: main_menu()
-    except KeyboardInterrupt: print(f"\n{t('bye_msg')}")
+    main()

@@ -1,2 +1,5 @@
-requests
-flask
+# Core dependencies: NONE (uses only Python stdlib)
+# All core functionality (monitoring, CLI, tkinter GUI) works with zero pip installs.
+
+# Optional: Windows service support
+# pywin32

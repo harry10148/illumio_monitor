@@ -1,0 +1,26 @@
+[Unit]
+Description=Illumio PCE Monitor
+Documentation=https://github.com/your-org/illumio_monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=illumio_monitor
+Group=illumio_monitor
+WorkingDirectory=/opt/illumio_monitor
+ExecStart=/usr/bin/python3 /opt/illumio_monitor/illumio_monitor.py --monitor --interval 10
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=illumio-monitor
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/illumio_monitor
+
+[Install]
+WantedBy=multi-user.target

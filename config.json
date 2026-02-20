@@ -1,0 +1,140 @@
+{
+    "api": {
+        "key": "api_1042e9261ebdc846c",
+        "org_id": "1",
+        "secret": "0fd756079fca3ac1c1cc8408204858bf329327ec8cce8f25ccc23c2d69d53728",
+        "url": "https://pce.lab.local:8443",
+        "verify_ssl": false
+    },
+    "alerts": {
+        "active": [
+            "mail"
+        ],
+        "line_channel_access_token": "sMvsAEwPYCW9VLuwMYv+2pknUacjy97SfW5FZ6aQ8e+RQHYAfBArISEm2Ez3+bpQspPROOCwwCwgjDa/MCxj6mB8D3C5RsoxGdUusXeAeANrSpBP3iG4JjL5/Fwpja4GkfLmlH81OBPakJLfxENwYAdB04t89/1O/w1cDnyilFU=",
+        "line_target_id": "U35cbbc2f6d158298b74063b7f0e458ec",
+        "line_token": "2009146294",
+        "webhook_url": ""
+    },
+    "email": {
+        "sender": "PCE@harrylee.net",
+        "recipients": [
+            "harry10148@gmail.com"
+        ]
+    },
+    "smtp": {
+        "host": "172.16.15.103",
+        "port": 25,
+        "user": "admin@harrylee.net",
+        "password": "1qaz@WSX",
+        "enable_auth": true,
+        "enable_tls": true
+    },
+    "settings": {
+        "enable_health_check": true,
+        "language": "en"
+    },
+    "rules": [
+        {
+            "id": 1771588480,
+            "type": "event",
+            "name": "Agent \u906d\u5230\u7ac4\u6539",
+            "filter_key": "event_type",
+            "filter_value": "agent.tampering",
+            "desc": "Best Practice",
+            "rec": "Check Logs",
+            "threshold_type": "immediate",
+            "threshold_count": 1,
+            "threshold_window": 10,
+            "cooldown_minutes": 30
+        },
+        {
+            "id": 1771588481,
+            "type": "event",
+            "name": "Agent \u96e2\u7dda",
+            "filter_key": "event_type",
+            "filter_value": "system_task.agent_offline_check",
+            "desc": "Best Practice",
+            "rec": "Check Logs",
+            "threshold_type": "immediate",
+            "threshold_count": 1,
+            "threshold_window": 10,
+            "cooldown_minutes": 30
+        },
+        {
+            "cooldown_minutes": 1,
+            "desc": "Best Practice",
+            "filter_key": "event_type",
+            "filter_value": "request.authentication_failed",
+            "id": 1771588482,
+            "name": "API \u8a8d\u8b49\u5931\u6557",
+            "rec": "Check Logs",
+            "threshold_count": 5,
+            "threshold_type": "count",
+            "threshold_window": 10,
+            "type": "event"
+        },
+        {
+            "cooldown_minutes": 1,
+            "desc": "Blocked Traffic",
+            "dst_label": null,
+            "id": 1771588580,
+            "name": "\u5927\u91cf\u88ab\u963b\u64cb\u6d41\u91cf",
+            "pd": 2,
+            "port": null,
+            "proto": null,
+            "rec": "Check Policy",
+            "src_label": null,
+            "threshold_count": 10,
+            "threshold_type": "count",
+            "threshold_window": 10,
+            "type": "traffic"
+        },
+        {
+            "cooldown_minutes": 1,
+            "desc": "Best Practice",
+            "filter_key": "event_type",
+            "filter_value": "user.login_failed",
+            "id": 1771588483,
+            "name": "\u767b\u5165\u5931\u6557",
+            "rec": "Check Logs",
+            "threshold_count": 5,
+            "threshold_type": "count",
+            "threshold_window": 10,
+            "type": "event"
+        },
+        {
+            "type": "bandwidth",
+            "name": "Bandwidth ",
+            "pd": 2,
+            "threshold_count": 10,
+            "threshold_window": 30,
+            "cooldown_minutes": 1,
+            "threshold_type": "count",
+            "port": null,
+            "proto": null,
+            "src_label": null,
+            "dst_label": null,
+            "ex_port": null,
+            "ex_src_label": "env=Kubernetes",
+            "ex_dst_label": null,
+            "id": 1771588559
+        },
+        {
+            "type": "volume",
+            "name": "Volume",
+            "pd": 2,
+            "threshold_count": 100,
+            "threshold_window": 30,
+            "cooldown_minutes": 1,
+            "threshold_type": "count",
+            "port": null,
+            "proto": null,
+            "src_label": null,
+            "dst_label": null,
+            "ex_port": null,
+            "ex_src_label": "env=Kubernetes",
+            "ex_dst_label": null,
+            "id": 1771588580
+        }
+    ]
+}

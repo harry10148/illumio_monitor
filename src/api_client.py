@@ -1,43 +1,120 @@
-import requests
 import json
 import time
 import gzip
+import ssl
+import base64
+import logging
+import urllib.request
+import urllib.error
 from io import BytesIO
-from requests.auth import HTTPBasicAuth
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from src.utils import Colors
 
-# Disable SSL warnings
-requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+logger = logging.getLogger(__name__)
 
 MAX_TRAFFIC_RESULTS = 200000
+MAX_RETRIES = 3
+RETRY_BACKOFF_BASE = 2  # seconds
+
 
 class ApiClient:
     def __init__(self, config_manager):
         self.cm = config_manager
         self.api_cfg = self.cm.config["api"]
         self.base_url = f"{self.api_cfg['url']}/api/v2/orgs/{self.api_cfg['org_id']}"
-        self.auth = HTTPBasicAuth(self.api_cfg['key'], self.api_cfg['secret'])
-        self.verify_ssl = self.api_cfg['verify_ssl']
+        self._auth_header = self._build_auth_header()
+        self._ssl_ctx = self._build_ssl_context()
+
+    def _build_auth_header(self):
+        credentials = f"{self.api_cfg['key']}:{self.api_cfg['secret']}"
+        encoded = base64.b64encode(credentials.encode('utf-8')).decode('ascii')
+        return f"Basic {encoded}"
+
+    def _build_ssl_context(self):
+        ctx = ssl.create_default_context()
+        if not self.api_cfg.get('verify_ssl', True):
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+
+    def _request(self, url, method="GET", data=None, headers=None, timeout=15, stream=False):
+        """
+        Core HTTP helper with retry logic.
+        Returns (status_code, response_body_bytes | None).
+        For stream=True, returns (status_code, raw_response_object) — caller must close it.
+        """
+        if headers is None:
+            headers = {}
+        headers.setdefault("Authorization", self._auth_header)
+        headers.setdefault("Accept", "application/json")
+
+        body = None
+        if data is not None:
+            body = json.dumps(data).encode('utf-8')
+            headers.setdefault("Content-Type", "application/json")
+
+        last_exc = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                req = urllib.request.Request(url, data=body, headers=headers, method=method)
+                resp = urllib.request.urlopen(req, timeout=timeout, context=self._ssl_ctx)
+                if stream:
+                    return resp.status, resp
+                resp_body = resp.read()
+                return resp.status, resp_body
+            except urllib.error.HTTPError as e:
+                status = e.code
+                resp_body = e.read()
+                if status == 429 and attempt < MAX_RETRIES:
+                    wait = RETRY_BACKOFF_BASE ** attempt
+                    logger.warning(f"Rate limited (429). Retrying in {wait}s... (attempt {attempt}/{MAX_RETRIES})")
+                    time.sleep(wait)
+                    last_exc = e
+                    continue
+                if status in (502, 503, 504) and attempt < MAX_RETRIES:
+                    wait = RETRY_BACKOFF_BASE ** attempt
+                    logger.warning(f"Server error ({status}). Retrying in {wait}s... (attempt {attempt}/{MAX_RETRIES})")
+                    time.sleep(wait)
+                    last_exc = e
+                    continue
+                return status, resp_body
+            except (urllib.error.URLError, OSError, TimeoutError) as e:
+                if attempt < MAX_RETRIES:
+                    wait = RETRY_BACKOFF_BASE ** attempt
+                    logger.warning(f"Connection error: {e}. Retrying in {wait}s... (attempt {attempt}/{MAX_RETRIES})")
+                    time.sleep(wait)
+                    last_exc = e
+                    continue
+                logger.error(f"Connection failed after {MAX_RETRIES} attempts: {e}")
+                return 0, str(e).encode('utf-8')
+
+        # Should not reach here, but safety fallback
+        return 0, str(last_exc).encode('utf-8') if last_exc else b""
 
     def check_health(self):
         url = f"{self.api_cfg['url']}/api/v2/health"
         try:
-            r = requests.get(url, auth=self.auth, verify=self.verify_ssl, timeout=10)
-            return r.status_code, r.text
+            status, body = self._request(url, timeout=10)
+            text = body.decode('utf-8', errors='replace') if isinstance(body, bytes) else str(body)
+            return status, text
         except Exception as e:
+            logger.error(f"Health check failed: {e}")
             return 0, str(e)
 
     def fetch_events(self, start_time_str, max_results=1000):
         try:
-            params = {"timestamp[gte]": start_time_str, "max_results": max_results}
-            headers = {"Accept": "application/json"}
-            r = requests.get(f"{self.base_url}/events", auth=self.auth, headers=headers, params=params, verify=self.verify_ssl, timeout=15)
-            if r.status_code != 200:
-                print(f"{Colors.FAIL}Get Events Failed: {r.status_code}{Colors.ENDC}")
+            params = urllib.parse.urlencode({
+                "timestamp[gte]": start_time_str,
+                "max_results": max_results
+            })
+            url = f"{self.base_url}/events?{params}"
+            status, body = self._request(url, timeout=15)
+            if status != 200:
+                logger.error(f"Get Events Failed: {status}")
+                print(f"{Colors.FAIL}Get Events Failed: {status}{Colors.ENDC}")
                 return []
-            return r.json()
+            return json.loads(body)
         except Exception as e:
+            logger.error(f"Fetch Events Error: {e}")
             print(f"{Colors.FAIL}Fetch Events Error: {e}{Colors.ENDC}")
             return []
 
@@ -45,6 +122,8 @@ class ApiClient:
         """
         Executes an async traffic query and yields results row by row to save memory.
         """
+        import urllib.parse
+
         payload = {
             "start_date": start_time_str, "end_date": end_time_str,
             "policy_decisions": policy_decisions,
@@ -54,78 +133,93 @@ class ApiClient:
             "destinations": {"include": [], "exclude": []},
             "services": {"include": [], "exclude": []}
         }
-        
+
         print(f"正在提交流量查詢 ({start_time_str} 至 {end_time_str})...")
+        logger.info(f"Submitting traffic query ({start_time_str} to {end_time_str})")
         try:
-            headers = {"Accept": "application/json", "Content-Type": "application/json"}
-            r = requests.post(f"{self.base_url}/traffic_flows/async_queries", auth=self.auth, headers=headers, json=payload, verify=self.verify_ssl, timeout=10)
-            
-            if r.status_code not in [201, 202]: 
-                print(f"API Error {r.status_code}: {r.text}")
+            url = f"{self.base_url}/traffic_flows/async_queries"
+            status, body = self._request(url, method="POST", data=payload, timeout=10)
+
+            if status not in (201, 202):
+                text = body.decode('utf-8', errors='replace') if isinstance(body, bytes) else str(body)
+                logger.error(f"API Error {status}: {text}")
+                print(f"API Error {status}: {text}")
                 return
 
-            job_url = r.json().get("href")
+            result = json.loads(body)
+            job_url = result.get("href")
             print("等待流量計算中...", end="", flush=True)
-            
+
             # Polling
-            for _ in range(60): # Wait up to 2 mins
+            poll_url = f"{self.api_cfg['url']}/api/v2{job_url}"
+            for _ in range(60):  # Wait up to 2 mins
                 time.sleep(2)
-                status_r = requests.get(f"{self.api_cfg['url']}/api/v2{job_url}", auth=self.auth, headers=headers, verify=self.verify_ssl)
-                if status_r.status_code != 200: continue
-                
-                state = status_r.json().get("status")
+                poll_status, poll_body = self._request(poll_url, timeout=15)
+                if poll_status != 200:
+                    continue
+
+                state = json.loads(poll_body).get("status")
                 if state == "completed":
                     print(" 完成。")
+                    logger.info("Traffic query completed.")
                     break
                 if state == "failed":
                     print(" 失敗。")
+                    logger.error("Traffic query failed.")
                     return
                 print(".", end="", flush=True)
             else:
                 print(" Timeout.")
+                logger.error("Traffic query timed out.")
                 return
 
             # Stream Download
-            dl = requests.get(f"{self.api_cfg['url']}/api/v2{job_url}/download", auth=self.auth, headers=headers, verify=self.verify_ssl, stream=True)
-            
-            buffer = BytesIO()
-            for chunk in dl.iter_content(chunk_size=8192):
-                 buffer.write(chunk)
-            
-            buffer.seek(0)
+            dl_url = f"{self.api_cfg['url']}/api/v2{job_url}/download"
+            dl_status, dl_body = self._request(dl_url, timeout=60)
+            if dl_status != 200:
+                logger.error(f"Download failed: {dl_status}")
+                return
+
+            buffer = BytesIO(dl_body)
+
             # Handle Gzip
             try:
                 with gzip.GzipFile(fileobj=buffer, mode='rb') as f:
-                    # Depending on API format, it might be a JSON array or JSON Lines.
-                    # Usually Illumio Async Traffic is JSON Lines if not requested otherwise, 
-                    # but the original code handled both. We'll try to read line by line.
                     for line in f:
                         line = line.strip()
-                        if not line: continue
+                        if not line:
+                            continue
                         try:
-                            # It could be a JSON array start/end if it is a single list
-                            if line == b'[' or line == b']': continue
-                            if line.endswith(b','): line = line[:-1]
+                            if line == b'[' or line == b']':
+                                continue
+                            if line.endswith(b','):
+                                line = line[:-1]
                             data = json.loads(line)
                             if isinstance(data, list):
-                                for item in data: yield item
+                                for item in data:
+                                    yield item
                             else:
                                 yield data
-                        except: pass
-            except Exception as e:
+                        except json.JSONDecodeError as je:
+                            logger.debug(f"Skipping unparseable line: {je}")
+            except (gzip.BadGzipFile, OSError):
                 # Fallback if not gzip
                 buffer.seek(0)
-                text_data = buffer.read().decode('utf-8')
+                text_data = buffer.read().decode('utf-8', errors='replace')
                 for line in text_data.splitlines():
-                    if not line.strip(): continue
-                    try: 
+                    if not line.strip():
+                        continue
+                    try:
                         data = json.loads(line)
                         if isinstance(data, list):
-                            for item in data: yield item
+                            for item in data:
+                                yield item
                         else:
                             yield data
-                    except: pass
+                    except json.JSONDecodeError as je:
+                        logger.debug(f"Skipping unparseable line: {je}")
 
         except Exception as e:
+            logger.error(f"Query Exception: {e}")
             print(f"Query Exception: {e}")
             return
