@@ -2,14 +2,20 @@
     "api": {
         "url": "https://pce.example.com:8443",
         "org_id": "1",
-        "key": "api_xxxxxxxxxxxxxxxxx",
-        "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-        "verify_ssl": false
+        "key": "api_xxxx",
+        "secret": "xxxx",
+        "verify_ssl": true
+    },
+    "alerts": {
+        "active": ["mail", "line", "webhook"],
+        "line_channel_access_token": "YOUR_LINE_MESSAGING_API_CHANNEL_ACCESS_TOKEN",
+        "line_target_id": "YOUR_LINE_USER_OR_GROUP_ID",
+        "webhook_url": "https://your.custom.webhook.endpoint/api"
     },
     "email": {
-        "sender": "monitor@localhost",
+        "sender": "illumio-monitor@example.com",
         "recipients": [
-            "admin@example.com"
+            "security-team@example.com"
         ]
     },
     "smtp": {
@@ -21,7 +27,8 @@
         "enable_tls": true
     },
     "settings": {
-        "enable_health_check": true
+        "enable_health_check": true,
+        "language": "en"
     },
     "rules": [
         {

@@ -1,6 +1,6 @@
-# Illumio PCE Monitor (V70.0)
+# Illumio PCE Monitor (v1.0.0)
 
-![Version](https://img.shields.io/badge/Version-v70.0.0-blue?style=flat-square)
+![Version](https://img.shields.io/badge/Version-v1.0.0-blue?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.6%2B-yellow?style=flat-square&logo=python&logoColor=white)
 
 這是一個專為 **Illumio Core (PCE)** 設計的進階監控工具。它透過 REST API 實現 **無 Agent (Agentless)** 監控，具備智慧型流量分析、安全事件偵測與自動化告警功能。

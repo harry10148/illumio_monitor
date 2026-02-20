@@ -1,6 +1,7 @@
 import os
 import logging
 from logging.handlers import RotatingFileHandler
+from src.i18n import t
 
 class Colors:
     HEADER = '\033[95m'
@@ -22,10 +23,10 @@ def safe_input(prompt: str, value_type=str, valid_range=None, allow_cancel=True,
             if raw.strip() == '-1' and allow_cancel: return None
             val = value_type(raw)
             if valid_range and val not in valid_range:
-                print(f"{Colors.FAIL}數值超出範圍。{Colors.ENDC}")
+                print(f"{Colors.FAIL}{t('error_out_of_range', default='數值超出範圍。')}{Colors.ENDC}")
                 continue
             return val
-        except ValueError: print(f"{Colors.FAIL}格式錯誤。{Colors.ENDC}")
+        except ValueError: print(f"{Colors.FAIL}{t('error_format', default='格式錯誤。')}{Colors.ENDC}")
 
 def setup_logger(name: str, log_file: str, level=logging.INFO, max_bytes: int = 10*1024*1024, backup_count: int = 5) -> logging.Logger:
     log_dir = os.path.dirname(log_file)

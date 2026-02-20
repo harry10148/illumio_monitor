@@ -15,6 +15,8 @@ from src.settings import (
     add_bandwidth_volume_menu, 
     manage_rules_menu
 )
+from src.i18n import t
+
 def main_menu():
     # Setup Logging
     # Root dir is the parent of the package directory (illumio_monitor)
@@ -30,21 +32,21 @@ def main_menu():
     
     while True:
         os.system('cls' if os.name == 'nt' else 'clear')
-        print(f"{Colors.HEADER}=== Illumio PCE Monitor v{__version__} ==={Colors.ENDC}")
+        print(f"{Colors.HEADER}=== Illumio PCE Monitor ==={Colors.ENDC}")
         print(f"API: {cm.config['api']['url']} | Rules: {len(cm.config['rules'])}")
         print("-" * 40)
-        print("1. 新增事件規則 (含 PCE Health Check)")
-        print(f"2. 新增{Colors.WARNING}流量規則 (Traffic Rule){Colors.ENDC}")
-        print(f"3. 新增{Colors.CYAN}頻寬與傳輸量規則 (Bandwidth & Volume){Colors.ENDC}")
-        print("4. 管理規則 (列表/刪除)")
-        print("5. 系統設定 (API / Email)")
-        print(f"{Colors.CYAN}6. 載入官方最佳實踐 (Best Practices){Colors.ENDC}")
-        print("7. 發送測試信件")
-        print("8. 立即執行監控 (Run Once)")
-        print(f"9. 流量規則模擬與除錯 (Debug Mode)")
-        print("0. 離開")
+        print(t('main_menu_1'))
+        print(t('main_menu_2').replace('{Colors.WARNING}', Colors.WARNING).replace('{Colors.ENDC}', Colors.ENDC))
+        print(t('main_menu_3').replace('{Colors.CYAN}', Colors.CYAN).replace('{Colors.ENDC}', Colors.ENDC))
+        print(t('main_menu_4'))
+        print(t('main_menu_5'))
+        print(t('main_menu_6').replace('{Colors.CYAN}', Colors.CYAN).replace('{Colors.ENDC}', Colors.ENDC))
+        print(t('main_menu_7'))
+        print(t('main_menu_8'))
+        print(t('main_menu_9'))
+        print(t('main_menu_0'))
         
-        sel = safe_input("\n請選擇", int, range(0, 10))
+        sel = safe_input(f"\n{t('please_select')}", int, range(0, 10))
         
         if sel == 0: break
         elif sel == 1: add_event_menu(cm)
@@ -53,30 +55,30 @@ def main_menu():
         elif sel == 4: manage_rules_menu(cm)
         elif sel == 5: settings_menu(cm)
         elif sel == 6: 
-            print(f"\n{Colors.WARNING}警告: 此操作將清除所有現有規則並載入官方建議設定。{Colors.ENDC}")
-            confirm = safe_input("確定要繼續嗎? (輸入 'YES' 確認)", str)
+            print(f"\n{Colors.WARNING}{t('warning_best_practice')}{Colors.ENDC}")
+            confirm = safe_input(t('confirm_best_practice'), str)
             if confirm == 'YES':
                 cm.load_best_practices()
-                input("Best practices loaded. Press Enter...")
+                input(t('best_practice_loaded'))
             else:
-                input("Operation cancelled. Press Enter...")
+                input(t('operation_cancelled'))
         elif sel == 7: 
-            Reporter(cm).send_email(force_test=True)
-            input("Done.")
+            Reporter(cm).send_alerts(force_test=True)
+            input(t('done_msg'))
         elif sel == 8:
             api = ApiClient(cm)
             rep = Reporter(cm)
             ana = Analyzer(cm, api, rep)
             ana.run_analysis()
-            rep.send_email()
-            print("Done.")
+            rep.send_alerts()
+            print(t('done_msg'))
         elif sel == 9:
             api = ApiClient(cm)
             rep = Reporter(cm)
             ana = Analyzer(cm, api, rep)
             ana.run_debug_mode()
-            input("Debug Done. Press Enter...")
+            input(t('debug_done'))
 
 if __name__ == "__main__":
     try: main_menu()
-    except KeyboardInterrupt: print("\nBye.")
+    except KeyboardInterrupt: print(f"\n{t('bye_msg')}")

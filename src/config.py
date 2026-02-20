@@ -2,6 +2,7 @@ import json
 import os
 import time
 from src.utils import Colors
+from src.i18n import t, set_language
 
 # Determine Root Directory (parent of the package)
 PKG_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -13,9 +14,15 @@ class ConfigManager:
         self.config_file = config_file
         self.config = {
             "api": {"url": "https://pce.example.com:8443", "org_id": "1", "key": "", "secret": "", "verify_ssl": True},
+            "alerts": {
+                "active": ["mail"],
+                "line_channel_access_token": "",
+                "line_target_id": "",
+                "webhook_url": ""
+            },
             "email": {"sender": "monitor@localhost", "recipients": ["admin@example.com"]},
             "smtp": {"host": "localhost", "port": 25, "user": "", "password": "", "enable_auth": False, "enable_tls": False},
-            "settings": {"enable_health_check": True},
+            "settings": {"enable_health_check": True, "language": "en"},
             "rules": []
         }
         self.load()
@@ -30,14 +37,19 @@ class ConfigManager:
                     if "smtp" not in self.config: 
                         self.config["smtp"] = {"host": "localhost", "port": 25, "user": "", "password": "", "enable_auth": False, "enable_tls": False}
             except Exception as e:
-                print(f"{Colors.FAIL}Error loading config: {e}{Colors.ENDC}")
+                print(f"{Colors.FAIL}{t('error_loading_config', error=e)}{Colors.ENDC}")
+            finally:
+                lang = self.config.get("settings", {}).get("language", "en")
+                set_language(lang)
 
     def save(self):
         try:
             with open(self.config_file, 'w') as f: json.dump(self.config, f, indent=4)
-            print(f"{Colors.GREEN}設定已儲存。{Colors.ENDC}")
+            lang = self.config.get("settings", {}).get("language", "en")
+            set_language(lang)
+            print(f"{Colors.GREEN}{t('config_saved')}{Colors.ENDC}")
         except Exception as e:
-            print(f"{Colors.FAIL}Error saving config: {e}{Colors.ENDC}")
+            print(f"{Colors.FAIL}{t('error_saving_config', error=e)}{Colors.ENDC}")
 
     def add_or_update_rule(self, new_rule):
         for i, rule in enumerate(self.config["rules"]):
@@ -49,7 +61,7 @@ class ConfigManager:
             if is_same:
                 new_rule["id"] = rule["id"]
                 self.config["rules"][i] = new_rule
-                print(f"{Colors.WARNING}規則已存在，已覆蓋更新設定。{Colors.ENDC}")
+                print(f"{Colors.WARNING}{t('rule_overwritten')}{Colors.ENDC}")
                 self.save()
                 return
         self.config["rules"].append(new_rule)
@@ -61,12 +73,12 @@ class ConfigManager:
         for idx in sorted_indices:
             if 0 <= idx < len(self.config["rules"]):
                 removed = self.config["rules"].pop(idx)
-                print(f"已刪除: {removed['name']}")
+                print(t('rule_deleted', name=removed['name']))
                 count += 1
         if count > 0: self.save()
 
     def load_best_practices(self):
-        print(f"{Colors.BLUE}正在載入最佳實踐 (會清空現有規則)...{Colors.ENDC}")
+        print(f"{Colors.BLUE}{t('loading_best_practices')}{Colors.ENDC}")
         self.config["rules"] = []
         ts = int(time.time())
         bps = [

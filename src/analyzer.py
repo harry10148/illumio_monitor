@@ -4,6 +4,7 @@ import gc
 from collections import Counter
 import os
 from src.utils import Colors, format_unit, safe_input
+from src.i18n import t
 
 # Refine Root Dir for State File
 PKG_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -169,19 +170,19 @@ class Analyzer:
     def run_analysis(self):
         # 1. Health Check
         if self.cm.config["settings"].get("enable_health_check", True):
-            print("Checking PCE Health...", end=" ", flush=True)
+            print(f"{t('checking_pce_health')}...", end=" ", flush=True)
             status, msg = self.api.check_health()
             if status != 200:
-                print(f"{Colors.FAIL}Error{Colors.ENDC}")
+                print(f"{Colors.FAIL}{t('status_error')}{Colors.ENDC}")
                 self.reporter.add_health_alert({"time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), "status": str(status), "details": msg[:200]})
             else:
-                print(f"{Colors.GREEN}OK{Colors.ENDC}")
+                print(f"{Colors.GREEN}{t('status_ok')}{Colors.ENDC}")
 
         # 2. Events
-        print("Checking Events...")
+        print(f"{t('checking_events')}...")
         events = self.api.fetch_events(self.state["last_check"]) 
         if events:
-            print(f"  Found {len(events)} events.")
+            print(t('found_events', count=len(events)))
             now_utc = datetime.datetime.now(datetime.timezone.utc)
             for rule in [r for r in self.cm.config["rules"] if r["type"] == "event"]:
                 matches = [e for e in events if rule["filter_value"] == e.get("event_type")]
@@ -273,7 +274,7 @@ class Analyzer:
                             f_copy['_metric_fmt'] = str(conn_val)
                             res['top_matches'].append(f_copy)
                 
-                print(f"  Processed {count_processed} traffic records.")
+                print(t('found_traffic', count=count_processed))
                 
                 # Check Triggers
                 for rule in tr_rules:
@@ -321,10 +322,10 @@ class Analyzer:
         if last_alert:
             last_dt = datetime.datetime.strptime(last_alert, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc)
             if (now_utc - last_dt).total_seconds() < (cd_minutes * 60):
-                print(f"{Colors.WARNING}Rule {rule['name']} triggered but in cooldown.{Colors.ENDC}")
+                print(f"{Colors.WARNING}{t('alert_cooldown', rule=rule['name'])}{Colors.ENDC}")
                 return False
         
-        print(f"{Colors.FAIL}>>> Trigger Alert: {rule['name']}{Colors.ENDC}")
+        print(f"{Colors.FAIL}{t('alert_trigger', rule=rule['name'])}{Colors.ENDC}")
         if "alert_history" not in self.state: self.state["alert_history"] = {}
         self.state["alert_history"][rid] = now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
         return True
@@ -336,7 +337,7 @@ class Analyzer:
 
 
     def run_debug_mode(self):
-        print(f"\n{Colors.HEADER}=== 流量規則模擬與除錯 (Debug Mode) ==={Colors.ENDC}")
+        print(f"\n{Colors.HEADER}{t('menu_debug_mode_title')}{Colors.ENDC}")
         
         # Determine max window from config
         max_win = 10 
@@ -345,14 +346,14 @@ class Analyzer:
                 w = r.get('threshold_window', 10)
                 if w > max_win: max_win = w
 
-        mins = safe_input("查詢過去幾分鐘的資料? [預設: 自動偵測最大規則時間]", int, allow_cancel=True)
+        mins = safe_input(t('debug_query_mins'), int, allow_cancel=True)
         if not mins: mins = max_win + 2
         
-        print("\nPolicy Decision 過濾:")
+        print(f"\nPolicy Decision {t('step_2_filters')}:")
         print("1. Blocked Only")
         print("2. Allowed Only")
         print("3. All (Blocked + Potential + Allowed) [預設]")
-        pd_sel = safe_input("選擇", int, range(1,4), allow_cancel=True) or 3
+        pd_sel = safe_input(t('please_select'), int, range(1,4), allow_cancel=True) or 3
         pds = ["blocked", "potentially_blocked", "allowed"]
         if pd_sel == 1: pds = ["blocked"]
         elif pd_sel == 2: pds = ["allowed"]
@@ -360,15 +361,15 @@ class Analyzer:
         now = datetime.datetime.now(datetime.timezone.utc)
         start_dt = now - datetime.timedelta(minutes=mins)
         # Using the streaming method but collecting all results for debug analysis
-        print(f"正在提交流量查詢 ({start_dt.strftime('%H:%M')} 至 {now.strftime('%H:%M')})...")
+        print(f"{t('debug_submit_query')} ({start_dt.strftime('%H:%M')} -> {now.strftime('%H:%M')})...")
         traffic_gen = self.api.execute_traffic_query_stream(start_dt.strftime('%Y-%m-%dT%H:%M:%SZ'), now.strftime('%Y-%m-%dT%H:%M:%SZ'), pds)
         traffic = list(traffic_gen) if traffic_gen else []
         
-        print(f"\n{Colors.CYAN}=== 模擬結果報告 ==={Colors.ENDC}")
-        print(f"共取得 {len(traffic)} 筆流量資料 (Window: {mins} mins)。")
+        print(f"\n{Colors.CYAN}{t('debug_report_title')}{Colors.ENDC}")
+        print(f"{t('debug_records_found')} {len(traffic)} (Window: {mins} mins)。")
         
         for rule in [r for r in self.cm.config["rules"] if r["type"] in ["traffic", "bandwidth", "volume"]]:
-            print(f"\n{Colors.HEADER}規則: {rule['name']} ({rule['type'].upper()}){Colors.ENDC}")
+            print(f"\n{Colors.HEADER}{t('traffic_rule')}: {rule['name']} ({rule['type'].upper()}){Colors.ENDC}")
             rule_win = rule.get("threshold_window", 10)
             rule_start = now - datetime.timedelta(minutes=rule_win)
             
@@ -391,22 +392,22 @@ class Analyzer:
                         f_copy['_metric_fmt'] = str(c)
                     matches.append(f_copy)
 
-            print(f"  -> [時間過濾] 原始資料: {len(traffic)} -> 規則視窗({rule_win}m): 剩餘 {len(matches)} 筆")
+            print(f"  -> [Filter] Raw: {len(traffic)} -> Window({rule_win}m): {len(matches)} left")
             
             val = 0.0
             if rule["type"] == "bandwidth":
                 # Find Max Bandwidth
                 for m in matches: 
                     if m['_metric_val'] > val: val = m['_metric_val']
-                print(f"  -> 計算最大頻寬 (Max): {val:.4f} Mbps")
+                print(f"  -> Max Bandwidth (Max): {val:.4f} Mbps")
             elif rule["type"] == "volume":
                 # Sum Volume
                 val = sum(m['_metric_val'] for m in matches)
-                print(f"  -> 計算總傳輸量 (Sum): {val:.4f} MB")
+                print(f"  -> Total Volume (Sum): {val:.4f} MB")
             else: # Traffic Count
                 # Sum Count
                 val = sum(m['_metric_val'] for m in matches)
-                print(f"  -> 計算總次數 (Sum): {int(val)}")
+                print(f"  -> Total Count (Sum): {int(val)}")
             
             is_trigger = False
             threshold = float(rule.get("threshold_count", 0))
@@ -415,11 +416,11 @@ class Analyzer:
             else:
                  if val >= threshold: is_trigger = True
             
-            status = f"{Colors.FAIL}🔴 WOULD TRIGGER{Colors.ENDC}" if is_trigger else f"{Colors.GREEN}🟢 PASS{Colors.ENDC}"
-            print(f"  -> 判定結果: {status} (閾值: {threshold})")
+            status = f"{Colors.FAIL}🔴 {t('trigger')}{Colors.ENDC}" if is_trigger else f"{Colors.GREEN}🟢 {t('pass')}{Colors.ENDC}"
+            print(f"  -> Result: {status} (Threshold: {threshold})")
             
             if matches:
-                print(f"  -> 樣本 (Top 10):")
+                print(f"  -> Sample (Top 10):")
                 if rule["type"] in ["bandwidth", "volume"]:
                      matches.sort(key=lambda x: x.get('_metric_val', 0), reverse=True)
                 
