@@ -49,6 +49,9 @@ python illumio_monitor.py --monitor --interval 5   # 5-minute interval (default:
 
 ### Requirements
 - Python 3.8+ (no `pip install` needed)
+- Linux GUI support (if using `--gui`):
+  - Ubuntu/Debian: `sudo apt install python3-tk`
+  - RHEL/Rocky: `sudo dnf install python3-tkinter`
 
 ### Quick Start
 ```bash
@@ -173,6 +176,9 @@ python illumio_monitor.py --monitor --interval 5   # 5 分鐘間隔（預設 10 
 
 ### 系統需求
 - Python 3.8+（無需 `pip install` 任何套件）
+- Linux GUI 支援（若使用 `--gui`）：
+  - Ubuntu/Debian: `sudo apt install python3-tk`
+  - RHEL/Rocky: `sudo dnf install python3-tkinter`
 
 ### 快速開始
 ```bash

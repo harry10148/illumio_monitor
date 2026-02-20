@@ -1,6 +1,6 @@
 # Secrets and Personal Config
-illumio_pce_config.json
-illumio_pce_state.json
+config.json
+state.json
 
 # Logs
 logs/

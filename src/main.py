@@ -139,12 +139,16 @@ def main_menu():
             input(t('debug_done'))
         elif sel == 10:
             # Launch tkinter GUI from console menu
-            try:
-                from src.gui import launch_gui
-                launch_gui(cm)
-            except ImportError as e:
-                print(f"{Colors.FAIL}GUI not available: {e}{Colors.ENDC}")
+            from src.gui import launch_gui, HAS_TK
+            if not HAS_TK:
+                import platform
+                print(f"{Colors.FAIL}GUI not available: tkinter is not installed.{Colors.ENDC}")
+                if platform.system() == 'Linux':
+                    print(f"  Ubuntu/Debian: sudo apt install python3-tk")
+                    print(f"  RHEL/Rocky:    sudo dnf install python3-tkinter")
                 input(t('press_enter_to_continue'))
+            else:
+                launch_gui(cm)
 
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────
