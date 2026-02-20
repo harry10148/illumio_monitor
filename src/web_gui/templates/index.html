@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Illumio PCE Monitor Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        [x-cloak] {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body
+    class="bg-gray-50 text-gray-900 font-sans antialiased h-screen flex overflow-hidden dark:bg-gray-900 dark:text-gray-100"
+    x-data="appData()" x-init="initApp()">
+
+    <!-- Sidebar -->
+    <aside
+        class="w-64 bg-white shadow-lg dark:bg-gray-800 flex flex-col z-10 transition-colors border-r dark:border-gray-700">
+        <div class="p-6 flex items-center gap-3 border-b dark:border-gray-700">
+            <div
+                class="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center text-white font-bold shadow-md">
+                <i class="ph-bold ph-shield-check text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold text-gray-800 dark:text-white leading-tight">Illumio Monitor</h1>
+                <p class="text-xs text-brand-500 font-semibold tracking-wider uppercase">v{{ version }}</p>
+            </div>
+        </div>
+
+        <nav class="flex-1 px-4 py-6 space-y-2">
+            <template x-for="tab in ['dashboard', 'rules', 'settings', 'run']" :key="tab">
+                <button @click="currentTab = tab"
+                    :class="currentTab === tab ? 'bg-brand-50 text-brand-600 dark:bg-brand-900/30 dark:text-brand-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'"
+                    class="w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all text-left capitalize">
+                    <i class="text-xl" :class="{
+                        'ph ph-squares-four': tab === 'dashboard',
+                        'ph ph-list-checks': tab === 'rules',
+                        'ph ph-gear': tab === 'settings',
+                        'ph ph-play-circle': tab === 'run'
+                    }"></i>
+                    <span x-text="tab === 'run' ? 'Actions & Run' : tab.replace('-', ' ')"></span>
+                </button>
+            </template>
+
+            <button @click="shutdownServer()"
+                class="mt-8 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all text-left">
+                <i class="text-xl ph ph-power"></i>
+                <span>Stop Web GUI</span>
+            </button>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-full bg-gray-50 dark:bg-gray-900 relative">
+        <header
+            class="h-16 border-b bg-white dark:bg-gray-800 dark:border-gray-700 flex items-center justify-between px-8 shadow-sm z-10">
+            <h2 class="text-xl font-bold flex capitalize text-gray-800 dark:text-white"
+                x-text="currentTab === 'run' ? 'Actions & Run' : currentTab.replace('-', ' ')"></h2>
+        </header>
+
+        <div class="flex-1 overflow-auto p-8 relative">
+
+            <!-- Toast Notification -->
+            <div x-show="toast.show" x-transition.opacity x-cloak
+                class="absolute top-4 right-8 px-6 py-3 rounded-lg shadow-lg text-white font-medium z-50 flex items-center gap-2 transition"
+                :class="toast.type === 'error' ? 'bg-red-500' : 'bg-green-500'">
+                <i class="ph-bold" :class="toast.type === 'error' ? 'ph-warning-circle' : 'ph-check-circle'"></i>
+                <span x-text="toast.message"></span>
+            </div>
+
+            <!-- Dashboard View -->
+            <div x-show="currentTab === 'dashboard'" x-transition.opacity x-cloak>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div
+                        class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-4 hover:shadow-md transition-shadow">
+                        <div
+                            class="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-2xl dark:bg-blue-900/40 dark:text-blue-400">
+                            <i class="ph-fill ph-shield-check"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 font-medium">Active Rules</p>
+                            <h3 class="text-2xl font-bold text-gray-800 dark:text-white" x-text="rules.length"></h3>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-4 hover:shadow-md transition-shadow">
+                        <div
+                            class="w-12 h-12 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-2xl dark:bg-purple-900/40 dark:text-purple-400">
+                            <i class="ph-fill ph-bell-ringing"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 font-medium">Alert Channels</p>
+                            <h3 class="text-2xl font-bold text-gray-800 dark:text-white"
+                                x-text="config.alerts?.active?.length || 0"></h3>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-4 hover:shadow-md transition-shadow">
+                        <div
+                            class="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-2xl dark:bg-green-900/40 dark:text-green-400">
+                            <i class="ph-fill ph-check-circle"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 font-medium">PCE API Check</p>
+                            <h3 class="text-xl font-bold text-gray-800 dark:text-white truncate"
+                                x-text="config.api?.url"></h3>
+                        </div>
+                    </div>
+                </div>
+
+                <div
+                    class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-12 text-center max-w-2xl mx-auto mt-12">
+                    <div
+                        class="w-20 h-20 bg-brand-50 text-brand-500 rounded-full flex items-center justify-center mx-auto mb-6 dark:bg-brand-900/30 dark:text-brand-400">
+                        <i class="ph ph-pulse text-4xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-800 dark:text-white mb-2">Welcome to Web GUI</h3>
+                    <p class="text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
+                        Manage your Illumio PCE monitoring configuration directly from here. Changes are saved
+                        automatically to your configuration file.
+                    </p>
+                    <button @click="currentTab = 'rules'"
+                        class="px-6 py-3 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg shadow-sm transition-colors text-sm">
+                        View Rules
+                    </button>
+                </div>
+            </div>
+
+            <!-- Rules View -->
+            <div x-show="currentTab === 'rules'" x-transition.opacity x-cloak>
+                <div
+                    class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                    <div
+                        class="p-6 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/80">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-800 dark:text-white">Configured Rules</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Review, add, or delete your
+                                monitoring criteria (Event, Traffic, Bandwidth, Volume).</p>
+                        </div>
+                        <button @click="openModal()"
+                            class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg shadow-sm flex items-center gap-2 transition-colors">
+                            <i class="ph-bold ph-plus"></i> Add Rule
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr
+                                    class="bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider border-b dark:border-gray-700">
+                                    <th class="px-6 py-4 font-semibold">Rule Context</th>
+                                    <th class="px-6 py-4 font-semibold">Match Filters</th>
+                                    <th class="px-6 py-4 font-semibold">Condition</th>
+                                    <th class="px-6 py-4 font-semibold text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                <template x-for="(rule, index) in rules" :key="index">
+                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
+                                        <td class="px-6 py-4">
+                                            <div class="flex items-center gap-3">
+                                                <div class="w-2 flex-shrink-0 h-10 rounded-full" :class="{
+                                                        'bg-blue-400': rule.type === 'event',
+                                                        'bg-purple-400': rule.type === 'traffic',
+                                                        'bg-green-400': rule.type === 'bandwidth' || rule.type === 'volume'
+                                                    }"></div>
+                                                <div>
+                                                    <div class="font-bold text-gray-800 dark:text-gray-200 text-sm"
+                                                        x-text="rule.name"></div>
+                                                    <div class="text-xs text-gray-500 uppercase tracking-widest mt-1 font-semibold"
+                                                        x-text="rule.type"></div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 text-xs text-gray-600 dark:text-gray-300 space-y-1">
+                                            <template x-if="rule.type === 'event'">
+                                                <div
+                                                    class="inline-block bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded mr-1 mb-1">
+                                                    Event Type: <span class="font-mono font-bold"
+                                                        x-text="rule.filter_value"></span></div>
+                                            </template>
+                                            <template x-if="rule.port">
+                                                <div
+                                                    class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-1 mb-1">
+                                                    Port: <span class="font-mono font-bold" x-text="rule.port"></span>
+                                                </div>
+                                            </template>
+                                            <template x-if="rule.src_label || rule.src_ip_in">
+                                                <div
+                                                    class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-1 mb-1">
+                                                    Src: <span class="font-mono font-bold"
+                                                        x-text="rule.src_label || rule.src_ip_in"></span></div>
+                                            </template>
+                                            <template x-if="rule.dst_label || rule.dst_ip_in">
+                                                <div
+                                                    class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-1 mb-1">
+                                                    Dst: <span class="font-mono font-bold"
+                                                        x-text="rule.dst_label || rule.dst_ip_in"></span></div>
+                                            </template>
+                                            <template x-if="rule.pd !== undefined && rule.type === 'traffic'">
+                                                <div
+                                                    class="inline-block bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-1 rounded mr-1 mb-1">
+                                                    Decision: <span class="font-mono font-bold"
+                                                        x-text="rule.pd === 2 ? 'Blocked' : (rule.pd === 1 ? 'Potential' : 'Allowed')"></span>
+                                                </div>
+                                            </template>
+                                            <template x-if="['bandwidth', 'volume'].includes(rule.type)">
+                                                <div
+                                                    class="inline-block bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-1 rounded mr-1 mb-1">
+                                                    Decision: <span class="font-mono font-bold">All Matches</span>
+                                                </div>
+                                            </template>
+                                        </td>
+                                        <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-200 font-medium">
+                                            <div class="flex items-center gap-2"
+                                                x-show="rule.threshold_type !== 'immediate'">
+                                                <i class="ph-bold ph-trend-up text-gray-400"></i>
+                                                <span>> <span x-text="rule.threshold_count"></span> <span
+                                                        x-show="rule.type === 'bandwidth'">Mbps</span><span
+                                                        x-show="rule.type === 'volume'">MB</span><span
+                                                        x-show="rule.type === 'event' || rule.type === 'traffic'">Hits</span></span>
+                                            </div>
+                                            <div class="flex items-center gap-2"
+                                                x-show="rule.threshold_type === 'immediate'">
+                                                <i class="ph-bold ph-lightning text-yellow-500"></i> Immediate Alert
+                                            </div>
+                                            <div class="text-xs text-gray-500 font-normal mt-1 flex gap-3"
+                                                x-show="rule.threshold_type !== 'immediate'">
+                                                <span><i class="ph ph-clock"></i> <span
+                                                        x-text="rule.threshold_window"></span>m</span>
+                                                <span><i class="ph ph-hourglass"></i> CD: <span
+                                                        x-text="rule.cooldown_minutes || rule.threshold_window"></span>m</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 text-right">
+                                            <button @click="editRuleObj(index)"
+                                                class="text-blue-500 hover:text-blue-700 transition-colors p-2 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 mr-2 opacity-0 group-hover:opacity-100"
+                                                title="Edit Rule">
+                                                <i class="ph-bold ph-pencil-simple text-lg"></i>
+                                            </button>
+                                            <button @click="deleteRule(index)"
+                                                class="text-red-500 hover:text-red-700 transition-colors p-2 rounded hover:bg-red-50 dark:hover:bg-red-900/30 opacity-0 group-hover:opacity-100"
+                                                title="Delete Rule">
+                                                <i class="ph-bold ph-trash text-lg"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr x-show="rules.length === 0">
+                                    <td colspan="4" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                        No rules configured entirely.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings View -->
+            <div x-show="currentTab === 'settings'" x-transition.opacity x-cloak>
+                <div class="max-w-4xl mx-auto space-y-6">
+
+                    <!-- General Settings -->
+                    <div
+                        class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+                        <h3
+                            class="text-lg font-bold text-gray-800 dark:text-white mb-4 border-b pb-2 dark:border-gray-700">
+                            General Settings</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label
+                                    class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Language</label>
+                                <select x-model="config.settings.language"
+                                    class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                                    <option value="en">English</option>
+                                    <option value="zh_TW">繁體中文</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center pt-5">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" x-model="config.settings.enable_health_check"
+                                        class="rounded text-brand-600 focus:ring-brand-500 h-5 w-5">
+                                    <span class="text-sm font-medium">Enable PCE Health Check</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- API Settings -->
+                        <div
+                            class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+                            <h3
+                                class="text-lg font-bold text-gray-800 dark:text-white mb-4 border-b pb-2 dark:border-gray-700">
+                                PCE API Configuration</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label
+                                        class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">API
+                                        URL</label>
+                                    <input type="text" x-model="config.api.url"
+                                        class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-colors dark:text-white">
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label
+                                            class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Org
+                                            ID</label>
+                                        <input type="text" x-model="config.api.org_id"
+                                            class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-colors dark:text-white">
+                                    </div>
+                                    <div>
+                                        <label
+                                            class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">API
+                                            Key</label>
+                                        <input type="text" x-model="config.api.key"
+                                            class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-colors dark:text-white">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label
+                                        class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">API
+                                        Secret</label>
+                                    <input type="password" x-model="config.api.secret" placeholder="••••••••"
+                                        class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-colors dark:text-white">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Alert Channels -->
+                        <div
+                            class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+                            <h3
+                                class="text-lg font-bold text-gray-800 dark:text-white mb-4 border-b pb-2 dark:border-gray-700">
+                                Alert Channels</h3>
+
+                            <div class="flex flex-wrap gap-4 mb-5">
+                                <label
+                                    class="flex items-center gap-2 cursor-pointer bg-gray-50 dark:bg-gray-900 px-3 py-1.5 rounded-lg border dark:border-gray-700">
+                                    <input type="checkbox" value="mail" x-model="config.alerts.active"
+                                        class="rounded text-brand-600 focus:ring-brand-500">
+                                    <span class="text-sm font-medium">Email</span>
+                                </label>
+                                <label
+                                    class="flex items-center gap-2 cursor-pointer bg-gray-50 dark:bg-gray-900 px-3 py-1.5 rounded-lg border dark:border-gray-700">
+                                    <input type="checkbox" value="line" x-model="config.alerts.active"
+                                        class="rounded text-brand-600 focus:ring-brand-500">
+                                    <span class="text-sm font-medium">LINE Webhook</span>
+                                </label>
+                                <label
+                                    class="flex items-center gap-2 cursor-pointer bg-gray-50 dark:bg-gray-900 px-3 py-1.5 rounded-lg border dark:border-gray-700">
+                                    <input type="checkbox" value="webhook" x-model="config.alerts.active"
+                                        class="rounded text-brand-600 focus:ring-brand-500">
+                                    <span class="text-sm font-medium">Custom Webhook</span>
+                                </label>
+                            </div>
+
+                            <div class="space-y-4">
+                                <div>
+                                    <label
+                                        class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">LINE
+                                        Channel Token</label>
+                                    <input type="password" x-model="config.alerts.line_channel_access_token"
+                                        placeholder="••••••••"
+                                        class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-colors dark:text-white">
+                                </div>
+                                <div>
+                                    <label
+                                        class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">LINE
+                                        Target ID</label>
+                                    <input type="text" x-model="config.alerts.line_target_id"
+                                        class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-colors dark:text-white">
+                                </div>
+                                <div class="pt-2 border-t dark:border-gray-700">
+                                    <label
+                                        class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">JSON
+                                        Webhook URL</label>
+                                    <input type="url" x-model="config.alerts.webhook_url"
+                                        class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-colors dark:text-white">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SMTP Settings -->
+                    <div
+                        class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+                        <h3
+                            class="text-lg font-bold text-gray-800 dark:text-white mb-4 border-b pb-2 dark:border-gray-700">
+                            SMTP Settings</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                                <label
+                                    class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">SMTP
+                                    Server (Host)</label>
+                                <input type="text" x-model="config.mail.host"
+                                    class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">SMTP
+                                    Port</label>
+                                <input type="number" x-model.number="config.mail.port"
+                                    class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Sender
+                                    Email</label>
+                                <input type="email" x-model="config.mail.sender"
+                                    class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Username</label>
+                                <input type="text" x-model="config.mail.user"
+                                    class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Password</label>
+                                <input type="password" x-model="config.mail.password" placeholder="••••••••"
+                                    class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                            </div>
+                            <div class="md:col-span-1">
+                                <label
+                                    class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Recipients
+                                    (Comma separated)</label>
+                                <input type="text" :value="(config.mail.receivers || []).join(',')"
+                                    @change="config.mail.receivers = $event.target.value.split(',').map(s=>s.trim()).filter(s=>s)"
+                                    placeholder="admin@example.com"
+                                    class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-4 mb-10">
+                        <button @click="saveSettings()"
+                            class="px-6 py-3 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg shadow-sm flex items-center gap-2 transition-colors">
+                            <i class="ph-bold ph-floppy-disk"></i> Save Configuration
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions & Run View -->
+            <div x-show="currentTab === 'run'" x-transition.opacity x-cloak>
+                <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                    <div
+                        class="md:col-span-2 bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                        <div class="flex items-center gap-4 mb-6">
+                            <div
+                                class="w-14 h-14 bg-green-50 text-green-500 rounded-full flex items-center justify-center dark:bg-green-900/30 dark:text-green-400">
+                                <i class="ph-fill ph-play text-2xl"
+                                    :class="{'animate-pulse': isRunning === 'scan'}"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-bold text-gray-800 dark:text-white">Execute Normal Scan</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Trigger standard Monitor Analyzer
+                                </p>
+                            </div>
+                        </div>
+                        <p class="text-gray-500 dark:text-gray-400 mb-6 text-sm">
+                            Fetches logs from the PCE array immediately, evaluates all rules, and dispatches any
+                            configured alerts based on thresholds.
+                        </p>
+                        <button @click="triggerAction('run')" :disabled="isRunning"
+                            class="px-6 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg shadow-sm transition-colors w-full flex justify-center items-center">
+                            <span x-show="isRunning !== 'scan'">Start Execution</span>
+                            <span x-show="isRunning === 'scan'"><i class="ph-bold ph-spinner animate-spin mr-2"></i>
+                                Executing...</span>
+                        </button>
+                    </div>
+
+                    <div
+                        class="bg-white dark:bg-gray-800 p-6 flex flex-col justify-between rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                        <div>
+                            <h3 class="font-bold text-gray-800 dark:text-white mb-2 flex items-center gap-2"><i
+                                    class="ph-fill ph-paper-plane-right text-blue-500"></i> Test Alerts</h3>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Send a mock alert to all active
+                                channels to verify connectivity.</p>
+                        </div>
+                        <button @click="triggerAction('test_alert')" :disabled="isRunning"
+                            class="px-4 py-2 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors w-full">
+                            Send Test Alert
+                        </button>
+                    </div>
+
+                    <div
+                        class="bg-white dark:bg-gray-800 p-6 flex flex-col justify-between rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                        <div>
+                            <h3 class="font-bold text-gray-800 dark:text-white mb-2 flex items-center gap-2"><i
+                                    class="ph-fill ph-magic-wand text-purple-500"></i> Best Practices</h3>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Append Illumio official best
+                                practice monitoring rules to your config.</p>
+                        </div>
+                        <button @click="triggerAction('best_practices')" :disabled="isRunning"
+                            class="px-4 py-2 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors w-full">
+                            Load Best Practices
+                        </button>
+                    </div>
+
+                    <div
+                        class="md:col-span-2 bg-white dark:bg-gray-800 p-6 flex flex-col justify-between rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                        <div>
+                            <h3 class="font-bold text-gray-800 dark:text-white mb-2 flex items-center gap-2"><i
+                                    class="ph-fill ph-bug text-orange-500"></i> Debug Mode</h3>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Run Traffic Analyzer rules locally
+                                to verify matches against historical traffic without sending real alerts.</p>
+                        </div>
+                        <button @click="triggerAction('debug')" :disabled="isRunning"
+                            class="px-4 py-2 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors w-full">
+                            Run Debug Analysis
+                        </button>
+                    </div>
+
+                    <!-- Console Box -->
+                    <div x-show="runConsole" class="md:col-span-3 mt-4" x-cloak>
+                        <h4 class="text-xs font-bold uppercase text-gray-500 dark:text-gray-400 mb-2 tracking-wider">
+                            Console Output</h4>
+                        <div class="text-left bg-gray-900 text-green-400 font-mono text-xs p-5 rounded-xl h-64 overflow-y-auto shadow-inner whitespace-pre-wrap leading-relaxed"
+                            x-text="runConsole"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Modal for Rules -->
+    <div x-show="modalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4" x-cloak>
+        <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" @click="closeModal()"></div>
+        <div
+            class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl relative z-10 flex flex-col max-h-[90vh]">
+            <div
+                class="p-6 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/80 rounded-t-xl">
+                <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                    <i class="ph-bold ph-shield-plus text-brand-600 dark:text-brand-400"></i>
+                    <span x-text="editingIndex >= 0 ? 'Modify Rule' : 'Create New Rule'"></span>
+                </h3>
+                <button @click="closeModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <i class="ph-bold ph-x text-xl"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto flex-1 space-y-6">
+                <!-- Basic Info -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Rule
+                            Name *</label>
+                        <input type="text" x-model="modalRule.name" required
+                            class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white"
+                            placeholder="e.g. Block Malicious DB Scans">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Rule
+                            Type</label>
+                        <select x-model="modalRule.type"
+                            class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                            <option value="traffic">Traffic Rule</option>
+                            <option value="event">Event Log Rule</option>
+                            <option value="bandwidth">Bandwidth Load Rule</option>
+                            <option value="volume">Traffic Volume Rule</option>
+                        </select>
+                    </div>
+                    <div x-show="modalRule.type === 'traffic'">
+                        <label
+                            class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Policy
+                            Decision</label>
+                        <select x-model.number="modalRule.pd"
+                            class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                            <option value="-1">All Matches</option>
+                            <option value="2">Blocked</option>
+                            <option value="1">Potential</option>
+                            <option value="0">Allowed</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Event Filters -->
+                <div x-show="modalRule.type === 'event'" class="border-t dark:border-gray-700 pt-5">
+                    <h4 class="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Event Matching</h4>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Event
+                            Type Filter</label>
+                        <input type="text" x-model="modalRule.filter_value" placeholder="e.g. system_task.error"
+                            class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                        <p class="text-xs text-gray-400 mt-1">Specify native PCE event string, e.g.
+                            <code>audit.error</code>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Traffic/BW/Vol Filters -->
+                <div x-show="['traffic', 'bandwidth', 'volume'].includes(modalRule.type)"
+                    class="border-t dark:border-gray-700 pt-5">
+                    <h4 class="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3 flex justify-between">
+                        <span>Traffic Filters</span>
+                        <span class="text-xs font-normal text-gray-400">(Leave blank for Any)</span>
+                    </h4>
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label
+                                class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Port</label>
+                            <input type="number" x-model.number="modalRule.port" placeholder="e.g. 443"
+                                class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                        </div>
+                        <div>
+                            <label
+                                class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Protocol</label>
+                            <select x-model.number="modalRule.proto"
+                                class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                                <option value="">Any</option>
+                                <option value="6">TCP</option>
+                                <option value="17">UDP</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Source
+                                (Label/IP)</label>
+                            <input type="text" x-model="modalRule.src_label" placeholder="e.g. role=Web or 10.0.0.1"
+                                class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                        </div>
+                        <div>
+                            <label
+                                class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Dest
+                                (Label/IP)</label>
+                            <input type="text" x-model="modalRule.dst_label" placeholder="e.g. app=DB"
+                                class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                        </div>
+                    </div>
+
+                    <h4 class="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wider mt-4">
+                        Exclusions (Optional)</h4>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <input type="number" x-model.number="modalRule.ex_port" placeholder="Exclude Port"
+                                class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                        </div>
+                        <div>
+                            <input type="text" x-model="modalRule.ex_src_label" placeholder="Exclude Source"
+                                class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                        </div>
+                        <div>
+                            <input type="text" x-model="modalRule.ex_dst_label" placeholder="Exclude Dest"
+                                class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Thresholds -->
+                <div class="border-t dark:border-gray-700 pt-5">
+                    <h4
+                        class="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3 flex justify-between items-center">
+                        <span>Trigger Thresholds</span>
+                        <select x-show="modalRule.type === 'event' || modalRule.type === 'traffic'"
+                            x-model="modalRule.threshold_type"
+                            class="text-xs bg-gray-100 dark:bg-gray-700 rounded px-2 py-1 outline-none text-gray-600 dark:text-gray-200 border-none cursor-pointer">
+                            <option value="count">Count (Cumulative)</option>
+                            <option value="immediate">Immediate (Single Match)</option>
+                        </select>
+                    </h4>
+
+                    <div class="grid grid-cols-3 gap-4"
+                        x-show="modalRule.threshold_type !== 'immediate' || ['bandwidth', 'volume'].includes(modalRule.type)">
+                        <div>
+                            <label
+                                class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1 text-brand-600">Trigger
+                                Value</label>
+                            <div class="relative">
+                                <input type="number" x-model.number="modalRule.threshold_count"
+                                    class="w-full bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-700/50 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white text-brand-700 font-bold font-mono">
+                                <span class="absolute right-3 top-2 text-xs text-brand-500 font-bold"
+                                    x-text="modalRule.type === 'bandwidth' ? 'Mbps' : (modalRule.type === 'volume' ? 'MB' : 'Hits')"></span>
+                            </div>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Time
+                                Window (m)</label>
+                            <input type="number" x-model.number="modalRule.threshold_window"
+                                class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                        </div>
+                        <div>
+                            <label
+                                class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Cooldown
+                                (m)</label>
+                            <input type="number" x-model.number="modalRule.cooldown_minutes"
+                                class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div
+                class="p-6 border-t dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/80 rounded-b-xl flex justify-end gap-3 z-20 shadow-[-10px_-10px_30px_rgba(0,0,0,0.02)]">
+                <button @click="closeModal()"
+                    class="px-5 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200">Cancel</button>
+                <button @click="saveRule()"
+                    class="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg shadow-sm transition-colors text-sm font-bold tracking-wide">Save
+                    Rule</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('appData', () => ({
+                currentTab: 'dashboard',
+                rules: [],
+                config: { api: {}, alerts: { active: [] }, smtp: {}, settings: {} },
+                toast: { show: false, message: '', type: 'success' },
+                modalOpen: false,
+                editingIndex: -1,
+                modalRule: {},
+                isRunning: false,
+                runConsole: '',
+
+                initApp() {
+                    this.fetchConfig();
+                },
+
+                showToast(msg, type = 'success') {
+                    this.toast = { show: true, message: msg, type: type };
+                    setTimeout(() => this.toast.show = false, 3000);
+                },
+
+                async fetchConfig() {
+                    try {
+                        const res = await fetch('/api/config');
+                        const data = await res.json();
+                        // Protect arrays from uninitialized Alpine bindings
+                        if (!Array.isArray(data.alerts.active)) data.alerts.active = [];
+                        if (!data.mail) data.mail = { receivers: [] };
+                        if (!data.settings) data.settings = { language: 'en', enable_health_check: true };
+
+                        this.config = data;
+                        this.rules = data.rules || [];
+                    } catch (e) {
+                        console.error(e);
+                        this.showToast('Failed to load configuration', 'error');
+                    }
+                },
+
+                async deleteRule(idx) {
+                    if (!confirm('Delete this rule?')) return;
+                    try {
+                        const res = await fetch(`/api/rules/${idx}`, { method: 'DELETE' });
+                        if (res.ok) {
+                            this.showToast('Rule deleted');
+                            this.fetchConfig();
+                        }
+                    } catch (e) { console.error(e); }
+                },
+
+                openModal() {
+                    this.editingIndex = -1;
+                    this.modalRule = {
+                        type: 'traffic', name: '', pd: 2, threshold_count: 5, threshold_window: 10, cooldown_minutes: 10, threshold_type: 'count',
+                        filter_value: '', port: '', proto: '', src_label: '', dst_label: '', ex_port: '', ex_src_label: '', ex_dst_label: ''
+                    };
+                    this.modalOpen = true;
+                },
+
+                editRuleObj(idx) {
+                    this.editingIndex = idx;
+                    this.modalRule = { ...this.rules[idx] };
+
+                    // Remap IP inputs if labels are missing
+                    if (!this.modalRule.src_label && this.modalRule.src_ip_in) this.modalRule.src_label = this.modalRule.src_ip_in;
+                    if (!this.modalRule.dst_label && this.modalRule.dst_ip_in) this.modalRule.dst_label = this.modalRule.dst_ip_in;
+                    if (!this.modalRule.ex_src_label && this.modalRule.ex_src_ip) this.modalRule.ex_src_label = this.modalRule.ex_src_ip;
+                    if (!this.modalRule.ex_dst_label && this.modalRule.ex_dst_ip) this.modalRule.ex_dst_label = this.modalRule.ex_dst_ip;
+
+                    if (!this.modalRule.threshold_type) this.modalRule.threshold_type = 'count';
+
+                    this.modalOpen = true;
+                },
+
+                closeModal() {
+                    this.modalOpen = false;
+                },
+
+                async saveRule() {
+                    if (!this.modalRule.name) return alert('Name required');
+
+                    let payload = { ...this.modalRule };
+                    if (this.editingIndex >= 0) {
+                        payload.index = this.editingIndex;
+                    }
+
+                    // Convert label inputs to IP structure if IP syntax detected (basic check for =)
+                    if (payload.src_label && !payload.src_label.includes('=')) { payload.src_ip_in = payload.src_label; payload.src_label = null; }
+                    if (payload.dst_label && !payload.dst_label.includes('=')) { payload.dst_ip_in = payload.dst_label; payload.dst_label = null; }
+                    if (payload.ex_src_label && !payload.ex_src_label.includes('=')) { payload.ex_src_ip = payload.ex_src_label; payload.ex_src_label = null; }
+                    if (payload.ex_dst_label && !payload.ex_dst_label.includes('=')) { payload.ex_dst_ip = payload.ex_dst_label; payload.ex_dst_label = null; }
+
+                    // Event rules require filter_key = event_type
+                    if (payload.type === 'event') {
+                        payload.filter_key = 'event_type';
+                    } else {
+                        // Cleanup event specifics for traffic/bandwidth
+                        delete payload.filter_value; delete payload.filter_key;
+                    }
+
+                    // Immediate rule cleanup
+                    if (payload.threshold_type === 'immediate') {
+                        payload.threshold_count = 1;
+                    }
+
+                    // Cleanup empty strings
+                    for (let k in payload) {
+                        if (payload[k] === '') payload[k] = null;
+                    }
+
+                    try {
+                        const res = await fetch('/api/rules', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (res.ok) {
+                            this.showToast('Rule saved successfully');
+                            this.closeModal();
+                            this.fetchConfig();
+                        } else {
+                            const err = await res.json();
+                            this.showToast('Error saving: ' + err.error, 'error');
+                        }
+                    } catch (e) { console.error(e); }
+                },
+
+                async saveSettings() {
+                    try {
+                        const res = await fetch('/api/settings', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                api: this.config.api,
+                                alerts: this.config.alerts,
+                                smtp: this.config.smtp,
+                                settings: this.config.settings
+                            })
+                        });
+                        if (res.ok) {
+                            this.showToast('Settings saved successfully');
+                            // Reload purely in case language changed
+                            if (window.location.search) window.location.reload();
+                        }
+                    } catch (e) { console.error(e); }
+                },
+
+                async triggerAction(actionName) {
+                    let endpoint = '/api/run';
+                    if (actionName === 'test_alert') endpoint = '/api/actions/test_alert';
+                    if (actionName === 'best_practices') endpoint = '/api/actions/best_practices';
+                    if (actionName === 'debug') endpoint = '/api/actions/debug';
+
+                    this.isRunning = actionName;
+                    this.runConsole = `Initiating [${actionName}] request...\n`;
+
+                    try {
+                        const res = await fetch(endpoint, { method: 'POST' });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.runConsole += (data.log || data.message || 'Success.') + '\nDone.';
+                            this.showToast('Task executed successfully!');
+                            if (actionName === 'best_practices') this.fetchConfig(); // Reload rules
+                        } else {
+                            this.runConsole += '\nERROR: ' + data.error + '\n' + (data.trace || '');
+                            this.showToast('Task failed', 'error');
+                        }
+                    } catch (e) {
+                        this.runConsole += '\nEXCEPTION: ' + e.toString();
+                    } finally {
+                        this.isRunning = false;
+                    }
+                },
+
+                async shutdownServer() {
+                    if (!confirm('Are you sure you want to stop the Web GUI? You will need to restart it from the CLI.')) return;
+                    try {
+                        this.showToast('Shutting down server...');
+                        await fetch('/api/actions/shutdown', { method: 'POST' });
+                        document.body.innerHTML = '<div class="flex items-center justify-center h-screen bg-gray-900 text-white text-2xl font-bold">Web GUI Stopped. You can close this window.</div>';
+                    } catch (e) { }
+                }
+            }))
+        })
+    </script>
+</body>
+
+</html>

@@ -44,9 +44,10 @@ def main_menu():
         print(t('main_menu_7'))
         print(t('main_menu_8'))
         print(t('main_menu_9'))
+        print(t('main_menu_10').replace('{Colors.CYAN}', Colors.CYAN).replace('{Colors.ENDC}', Colors.ENDC))
         print(t('main_menu_0'))
         
-        sel = safe_input(f"\n{t('please_select')}", int, range(0, 10))
+        sel = safe_input(f"\n{t('please_select')}", int, range(0, 11))
         
         if sel == 0: break
         elif sel == 1: add_event_menu(cm)
@@ -78,6 +79,17 @@ def main_menu():
             ana = Analyzer(cm, api, rep)
             ana.run_debug_mode()
             input(t('debug_done'))
+        elif sel == 10:
+            from src.web_gui.app import init_app, start_server
+            import threading
+            print(f"\n{Colors.CYAN}Preparing to start Web GUI...{Colors.ENDC}")
+            port = safe_input("Bind Port [8080]", int, allow_cancel=True) or 8080
+            init_app(cm)
+            try:
+                print(f"{Colors.WARNING}Press Ctrl+C to stop the Web GUI and return to CLI.{Colors.ENDC}")
+                start_server("0.0.0.0", port)
+            except KeyboardInterrupt:
+                print(f"\n{Colors.GREEN}Web GUI stopped. Returning to menu...{Colors.ENDC}")
 
 if __name__ == "__main__":
     try: main_menu()

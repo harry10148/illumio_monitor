@@ -336,7 +336,7 @@ class Analyzer:
         return ", ".join(crit)
 
 
-    def run_debug_mode(self):
+    def run_debug_mode(self, mins=None, pd_sel=None):
         print(f"\n{Colors.HEADER}{t('menu_debug_mode_title')}{Colors.ENDC}")
         
         # Determine max window from config
@@ -346,14 +346,18 @@ class Analyzer:
                 w = r.get('threshold_window', 10)
                 if w > max_win: max_win = w
 
-        mins = safe_input(t('debug_query_mins'), int, allow_cancel=True)
+        if mins is None:
+            mins = safe_input(t('debug_query_mins'), int, allow_cancel=True)
         if not mins: mins = max_win + 2
         
         print(f"\nPolicy Decision {t('step_2_filters')}:")
         print("1. Blocked Only")
         print("2. Allowed Only")
         print("3. All (Blocked + Potential + Allowed) [預設]")
-        pd_sel = safe_input(t('please_select'), int, range(1,4), allow_cancel=True) or 3
+        
+        if pd_sel is None:
+            pd_sel = safe_input(t('please_select'), int, range(1,4), allow_cancel=True) or 3
+            
         pds = ["blocked", "potentially_blocked", "allowed"]
         if pd_sel == 1: pds = ["blocked"]
         elif pd_sel == 2: pds = ["allowed"]

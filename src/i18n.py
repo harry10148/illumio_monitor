@@ -35,8 +35,10 @@ MESSAGES = {
         "main_menu_7": "7. Send Test Alert",
         "main_menu_8": "8. Run Monitor Once",
         "main_menu_9": "9. Traffic Rule Debug Mode",
+        "main_menu_10": "10. Launch Web GUI",
         "main_menu_0": "0. Exit",
         "please_select": "Please select",
+        "starting_web_gui": "Starting Web GUI at",
         
         # Add Rules Menus
         "menu_add_event_title": "=== Add Event Monitor Rule ===",
@@ -213,8 +215,10 @@ MESSAGES = {
         "main_menu_7": "7. 發送測試告警",
         "main_menu_8": "8. 立即執行監控 (Run Once)",
         "main_menu_9": "9. 流量規則模擬與除錯 (Debug Mode)",
+        "main_menu_10": "10. 啟動 Web GUI (網頁管理介面)",
         "main_menu_0": "0. 離開",
         "please_select": "請選擇",
+        "starting_web_gui": "正在啟動 Web GUI 於",
         
         # Add Rules Menus
         "menu_add_event_title": "=== 新增事件監控規則 ===",

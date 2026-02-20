@@ -30,12 +30,15 @@ class Reporter:
         self.metric_alerts.append(alert)
 
     def generate_pretty_snapshot_html(self, data_list):
+        import re
+        def clean_ansi(text):
+            return re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', str(text))
+
         if not data_list: return "No Data"
         html = "<table style='width:100%; border-collapse:collapse; font-family:Arial,sans-serif; font-size:12px; border:1px solid #ddd;'>"
         html += "<tr style='background-color:#f2f2f2; text-align:left;'>"
         html += f"<th style='padding:8px; border:1px solid #ddd;'>{t('table_value')}</th>"
-        html += f"<th style='padding:8px; border:1px solid #ddd;'>{t('table_first_seen')}</th>"
-        html += f"<th style='padding:8px; border:1px solid #ddd;'>{t('table_last_seen')}</th>"
+        html += f"<th style='padding:8px; border:1px solid #ddd;'>{t('table_first_seen')} /<br>{t('table_last_seen')}</th>"
         html += f"<th style='padding:8px; border:1px solid #ddd;'>{t('table_dir')}</th>"
         html += f"<th style='padding:8px; border:1px solid #ddd;'>{t('table_source')}</th>"
         html += f"<th style='padding:8px; border:1px solid #ddd;'>{t('table_destination')}</th>"
@@ -44,7 +47,7 @@ class Reporter:
         html += f"<th style='padding:8px; border:1px solid #ddd;'>{t('table_decision')}</th>"
         html += "</tr>"
         for d in data_list:
-            val_str = d.get('_metric_fmt', '-')
+            val_str = clean_ansi(d.get('_metric_fmt', '-'))
             ts_r = d.get('timestamp_range', {})
             t_first = ts_r.get('first_detected', d.get('timestamp','-')).replace('T',' ').split('.')[0]
             t_last = ts_r.get('last_detected', '-').replace('T',' ').split('.')[0]
@@ -53,31 +56,30 @@ class Reporter:
             src = d.get('src', {})
             s_ip = src.get('ip', '-')
             s_wl = src.get('workload', {})
-            s_name = s_wl.get('name') or s_wl.get('hostname') or s_ip
+            s_name = clean_ansi(s_wl.get('name') or s_wl.get('hostname') or s_ip)
             s_labels = s_wl.get('labels', [])
-            s_badges = "".join([f"<span style='background:#e1ecf4; color:#2c5e77; padding:2px 5px; border-radius:4px; font-size:10px; margin-right:3px;'>{l.get('key')}:{l.get('value')}</span>" for l in s_labels])
+            s_badges = "".join([f"<span style='background:#e1ecf4; color:#2c5e77; padding:2px 5px; border-radius:4px; font-size:10px; margin-right:3px;'>{clean_ansi(l.get('key'))}:{clean_ansi(l.get('value'))}</span>" for l in s_labels])
             dst = d.get('dst', {})
             d_ip = dst.get('ip', '-')
             d_wl = dst.get('workload', {})
-            d_name = d_wl.get('name') or d_wl.get('hostname') or d_ip
+            d_name = clean_ansi(d_wl.get('name') or d_wl.get('hostname') or d_ip)
             d_labels = d_wl.get('labels', [])
-            d_badges = "".join([f"<span style='background:#e1ecf4; color:#2c5e77; padding:2px 5px; border-radius:4px; font-size:10px; margin-right:3px;'>{l.get('key')}:{l.get('value')}</span>" for l in d_labels])
+            d_badges = "".join([f"<span style='background:#e1ecf4; color:#2c5e77; padding:2px 5px; border-radius:4px; font-size:10px; margin-right:3px;'>{clean_ansi(l.get('key'))}:{clean_ansi(l.get('value'))}</span>" for l in d_labels])
             svc = d.get('service', {})
             port = d.get('dst_port') or svc.get('port') or '-'
             proto = d.get('proto') or svc.get('proto') or '-'
             proto_str = "TCP" if proto == 6 else "UDP" if proto == 17 else str(proto)
             count = d.get('num_connections') or d.get('count') or 1
             pd_map = {
-                "blocked": f"<span style='color:white; background:#dc3545; padding:2px 6px; border-radius:3px;'>{t('decision_blocked')}</span>",
-                "potentially_blocked": f"<span style='color:black; background:#ffc107; padding:2px 6px; border-radius:3px;'>{t('decision_potential')}</span>",
-                "allowed": f"<span style='color:white; background:#28a745; padding:2px 6px; border-radius:3px;'>{t('decision_allowed')}</span>"
+                "blocked": f"<span style='color:white; background:#dc3545; padding:2px 6px; border-radius:3px;'>{clean_ansi(t('decision_blocked'))}</span>",
+                "potentially_blocked": f"<span style='color:black; background:#ffc107; padding:2px 6px; border-radius:3px;'>{clean_ansi(t('decision_potential'))}</span>",
+                "allowed": f"<span style='color:white; background:#28a745; padding:2px 6px; border-radius:3px;'>{clean_ansi(t('decision_allowed'))}</span>"
             }
             decision = str(d.get('policy_decision')).lower()
-            decision_html = pd_map.get(decision, decision)
+            decision_html = pd_map.get(decision, clean_ansi(decision))
             html += "<tr>"
             html += f"<td style='padding:8px; border:1px solid #ddd; font-weight:bold; color:#6f42c1;'>{val_str}</td>"
-            html += f"<td style='padding:8px; border:1px solid #ddd; white-space:nowrap; font-size:10px;'>{t_first}</td>"
-            html += f"<td style='padding:8px; border:1px solid #ddd; white-space:nowrap; font-size:10px;'>{t_last}</td>"
+            html += f"<td style='padding:8px; border:1px solid #ddd; white-space:nowrap; font-size:10px;'>{t_first}<br>{t_last}</td>"
             html += f"<td style='padding:8px; border:1px solid #ddd; text-align:center;'>{direction}</td>"
             html += f"<td style='padding:8px; border:1px solid #ddd;'><strong>{s_name}</strong><br><small>{s_ip}</small><br>{s_badges}</td>"
             html += f"<td style='padding:8px; border:1px solid #ddd;'><strong>{d_name}</strong><br><small>{d_ip}</small><br>{d_badges}</td>"
@@ -89,6 +91,10 @@ class Reporter:
         return html
         
     def _build_plain_text_report(self):
+        import re
+        def clean_ansi(text):
+            return re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', str(text))
+
         body = f"{t('report_header')}\n"
         body += f"{t('generated_at', time=datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC'))}\n"
         body += "-" * 20 + "\n\n"
@@ -96,28 +102,28 @@ class Reporter:
         if self.health_alerts:
             body += f"{t('health_alerts_header')}\n"
             for a in self.health_alerts:
-                body += f"[{a['time']}] {a['status']} - {a['details']}\n"
+                body += clean_ansi(f"[{a['time']}] {a['status']} - {a['details']}\n")
             body += "\n"
 
         if self.event_alerts:
             body += f"{t('security_events_header')}\n"
             for a in self.event_alerts:
-                body += f"[{a['time']}] {a['rule']} ({a.get('severity','').upper()} x{a['count']})\n"
-                body += f"Desc: {a['desc']}\n"
+                body += clean_ansi(f"[{a['time']}] {a['rule']} ({a.get('severity','').upper()} x{a['count']})\n")
+                body += clean_ansi(f"Desc: {a['desc']}\n")
             body += "\n"
 
         if self.traffic_alerts:
             body += f"{t('traffic_alerts_header')}\n"
             for a in self.traffic_alerts:
-                body += f"- {a['rule']} : {a['count']} ({a.get('criteria','')})\n"
-                body += f"  {t('traffic_toptalkers')}: {a['details'].replace('<br>', ', ')}\n"
+                body += clean_ansi(f"- {a['rule']} : {a['count']} ({a.get('criteria','')})\n")
+                body += clean_ansi(f"  {t('traffic_toptalkers')}: {a['details'].replace('<br>', ', ')}\n")
             body += "\n"
 
         if self.metric_alerts:
             body += f"{t('metric_alerts_header')}\n"
             for a in self.metric_alerts:
-                body += f"- {a['rule']} : {a['count']} ({a.get('criteria','')})\n"
-                body += f"  {t('traffic_toptalkers')}: {a['details'].replace('<br>', ', ')}\n"
+                body += clean_ansi(f"- {a['rule']} : {a['count']} ({a.get('criteria','')})\n")
+                body += clean_ansi(f"  {t('traffic_toptalkers')}: {a['details'].replace('<br>', ', ')}\n")
             body += "\n"
         return body
 
