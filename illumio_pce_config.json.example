@@ -1,0 +1,41 @@
+{
+    "api": {
+        "url": "https://pce.example.com:8443",
+        "org_id": "1",
+        "key": "api_xxxxxxxxxxxxxxxxx",
+        "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "verify_ssl": false
+    },
+    "email": {
+        "sender": "monitor@localhost",
+        "recipients": [
+            "admin@example.com"
+        ]
+    },
+    "smtp": {
+        "host": "smtp.example.com",
+        "port": 25,
+        "user": "user",
+        "password": "password",
+        "enable_auth": true,
+        "enable_tls": true
+    },
+    "settings": {
+        "enable_health_check": true
+    },
+    "rules": [
+        {
+            "id": 1,
+            "type": "event",
+            "name": "Example Event Rule",
+            "filter_key": "event_type",
+            "filter_value": "system_task.agent_offline_check",
+            "desc": "Example description",
+            "rec": "Check Logs",
+            "threshold_type": "immediate",
+            "threshold_count": 1,
+            "threshold_window": 10,
+            "cooldown_minutes": 30
+        }
+    ]
+}
