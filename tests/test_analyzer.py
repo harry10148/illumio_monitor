@@ -1,8 +1,8 @@
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
-from illumio_monitor.analyzer import Analyzer
-from illumio_monitor.config import ConfigManager
+from src.analyzer import Analyzer
+from src.config import ConfigManager
 
 class TestAnalyzer(unittest.TestCase):
     def setUp(self):

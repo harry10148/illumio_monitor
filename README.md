@@ -109,10 +109,20 @@ Email 告警表格經過優化，欄位定義如下：
 
 ## 🚀 安裝與自動化 (Installation)
 
-### 1. 系統需求
+## 🚀 安裝與自動化 (Installation)
+
+### 1. 系統需求 (System Requirements)
 * Python 3.6+
 * Python Requests 模組 (`pip3 install requests`)
 
+#### Windows
+1. 下載並安裝 [Python 3](https://www.python.org/downloads/windows/) (安裝時請勾選 **Add Python to PATH**)。
+2. 開啟 PowerShell 或 CMD 安裝相依套件：
+   ```powershell
+   pip install requests
+   ```
+
+#### Linux / macOS
 **RHEL / Rocky / CentOS:**
 ```bash
 sudo dnf install python3 python3-requests -y
@@ -124,8 +134,23 @@ sudo apt update
 sudo apt install python3 python3-requests -y
 ```
 
-### 2. 設定 Crontab 排程
-建議每 5 或 10 分鐘執行一次 (配合您的規則視窗設定)。
+### 2. 執行與排程 (Execution & Scheduling)
+
+#### Windows
+* **互動模式 (Interactive)**:
+    雙擊專案目錄下的 `run_monitor.bat` 即可啟動選單。
+
+* **自動化排程 (Task Scheduler)**:
+    本專案提供 `scheduled_run.bat` 用於自動化執行 (對應 Run Once 模式)。
+    1. 開啟 **工作排程器 (Task Scheduler)**。
+    2. 建立基本工作，名稱設為 "Illumio Monitor"。
+    3. 觸發程序: 選擇「每天」，並在進階設定中勾選「每隔 5 或 10 分鐘重複工作」。
+    4. 動作: 選擇 **啟動程式**。
+        * **程式/指令碼**: 瀏覽並選擇 `scheduled_run.bat`。
+        * **開始位置 (Start in)**: 填入專案目錄路徑 (重要!)。
+
+#### Linux (Crontab)
+建議每 5 或 10 分鐘執行一次。
 
 ```bash
 # 每 10 分鐘執行一次監控 (輸入 8 代表 Run Once 模式)

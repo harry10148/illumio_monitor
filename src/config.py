@@ -1,7 +1,7 @@
 import json
 import os
 import time
-from .utils import Colors
+from src.utils import Colors
 
 # Determine Root Directory (parent of the package)
 PKG_DIR = os.path.dirname(os.path.abspath(__file__))

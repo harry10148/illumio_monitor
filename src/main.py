@@ -1,15 +1,14 @@
 import sys
 import os
 import logging
-from . import __version__
-from .utils import setup_logger
-from .config import ConfigManager
-from .api_client import ApiClient
-from .analyzer import Analyzer
-from .reporter import Reporter
-from .utils import Colors, safe_input
-from .utils import Colors, safe_input
-from .settings import (
+from src import __version__
+from src.utils import setup_logger
+from src.config import ConfigManager
+from src.api_client import ApiClient
+from src.analyzer import Analyzer
+from src.reporter import Reporter
+from src.utils import Colors, safe_input
+from src.settings import (
     settings_menu, 
     add_event_menu, 
     add_traffic_menu, 
@@ -70,7 +69,7 @@ def main_menu():
             ana = Analyzer(cm, api, rep)
             ana.run_analysis()
             rep.send_email()
-            input("Done.")
+            print("Done.")
         elif sel == 9:
             api = ApiClient(cm)
             rep = Reporter(cm)

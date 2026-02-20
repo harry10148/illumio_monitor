@@ -5,7 +5,7 @@ import gzip
 from io import BytesIO
 from requests.auth import HTTPBasicAuth
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
-from .utils import Colors
+from src.utils import Colors
 
 # Disable SSL warnings
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)

@@ -1,7 +1,7 @@
 import os
 import datetime
-from .utils import Colors, safe_input
-from .config import ConfigManager # Type hint mostly
+from src.utils import Colors, safe_input
+from src.config import ConfigManager # Type hint mostly
 
 FULL_EVENT_CATALOG = {
     "Agent Health": {

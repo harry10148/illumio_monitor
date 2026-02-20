@@ -3,7 +3,7 @@ import json
 import gc
 from collections import Counter
 import os
-from .utils import Colors, format_unit, safe_input
+from src.utils import Colors, format_unit, safe_input
 
 # Refine Root Dir for State File
 PKG_DIR = os.path.dirname(os.path.abspath(__file__))

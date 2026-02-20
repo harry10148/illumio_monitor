@@ -3,7 +3,7 @@ import json
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from .utils import Colors
+from src.utils import Colors
 
 class Reporter:
     def __init__(self, config_manager):
