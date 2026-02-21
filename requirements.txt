@@ -1,5 +1,5 @@
-# Core dependencies: NONE (uses only Python stdlib)
-# All core functionality (monitoring, CLI, tkinter GUI) works with zero pip installs.
+# Core: Zero external dependencies (Python stdlib only)
+# CLI and daemon modes work without any pip install.
 
-# Optional: Windows service support
-# pywin32
+# Optional: Web GUI mode (--gui)
+flask

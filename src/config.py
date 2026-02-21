@@ -108,10 +108,10 @@ class ConfigManager:
         self.config["rules"] = []
         ts = int(time.time())
         bps = [
-            ("Agent 遭到竄改", "agent.tampering", "immediate", 1, 10, 30),
-            ("Agent 離線", "system_task.agent_offline_check", "immediate", 1, 10, 30),
-            ("API 認證失敗", "request.authentication_failed", "count", 5, 10, 30),
-            ("登入失敗", "user.login_failed", "count", 5, 10, 30)
+            ("Agent Tampering Detected", "agent.tampering", "immediate", 1, 10, 30),
+            ("Agent Offline", "system_task.agent_offline_check", "immediate", 1, 10, 30),
+            ("API Authentication Failed", "request.authentication_failed", "count", 5, 10, 30),
+            ("Login Failed", "user.login_failed", "count", 5, 10, 30)
         ]
         for i, (name, etype, ttype, cnt, win, cd) in enumerate(bps):
             self.config["rules"].append({
@@ -122,8 +122,9 @@ class ConfigManager:
                 "threshold_window": win, "cooldown_minutes": cd
             })
         self.config["rules"].append({
-            "id": ts + 100, "type": "traffic", "name": "大量被阻擋流量", "pd": 2,
-            "port": None, "proto": None, "src_label": None, "dst_label": None, "desc": "Blocked Traffic",
+            "id": ts + 100, "type": "traffic", "name": "High Blocked Traffic", "pd": 2,
+            "port": None, "proto": None, "src_label": None, "dst_label": None,
+            "desc": "Blocked traffic exceeds threshold",
             "rec": "Check Policy", "threshold_type": "count", "threshold_count": 10,
             "threshold_window": 10, "cooldown_minutes": 30
         })

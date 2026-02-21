@@ -1,24 +1,24 @@
 """
-Illumio PCE Monitor — Tkinter GUI (polished ttk themed interface).
-Full feature parity with CLI: Dashboard, Rules (add/edit/delete), Settings, Actions (Run, Debug, Test Alert).
+Illumio PCE Monitor — Flask Web GUI.
+Optional dependency: pip install flask
 
-Note: On Linux, tkinter requires python3-tk system package:
-  Ubuntu/Debian: sudo apt install python3-tk
-  RHEL/Rocky:    sudo dnf install python3-tkinter
+Features full parity with CLI:
+  Dashboard, Rules (add event/traffic/bandwidth, delete), Settings, Actions (Run, Debug, Test Alert, Best Practices).
 """
 import re
+import os
+import sys
+import io
+import json
 import datetime
 import threading
 import logging
-import os
-import time
 
 try:
-    import tkinter as tk
-    from tkinter import ttk, messagebox, scrolledtext
-    HAS_TK = True
+    from flask import Flask, request, jsonify
+    HAS_FLASK = True
 except ImportError:
-    HAS_TK = False
+    HAS_FLASK = False
 
 from src.config import ConfigManager
 from src.i18n import t
@@ -26,7 +26,6 @@ from src import __version__
 
 logger = logging.getLogger(__name__)
 
-# ─── ANSI Stripping ──────────────────────────────────────────────────────────
 _ANSI_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 
@@ -34,7 +33,23 @@ def _strip_ansi(text: str) -> str:
     return _ANSI_RE.sub('', text)
 
 
-# ─── Event Catalog (mirrors settings.py) ─────────────────────────────────────
+def _capture_stdout(func):
+    """Run func, capture its stdout, strip ANSI, return as string."""
+    buf = io.StringIO()
+    old = sys.stdout
+    sys.stdout = buf
+    try:
+        func()
+    except Exception as e:
+        buf.write(f"\nError: {e}\n")
+    finally:
+        sys.stdout = old
+    return _strip_ansi(buf.getvalue())
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Event Catalog (mirrors settings.py)
+# ═══════════════════════════════════════════════════════════════════════════════
 FULL_EVENT_CATALOG = {
     "Agent Health": {
         "system_task.agent_missed_heartbeats_check": "Missed Heartbeats",
@@ -79,797 +94,768 @@ FULL_EVENT_CATALOG = {
     }
 }
 
-# ─── Color Palette ────────────────────────────────────────────────────────────
-BG_DARK = "#1e1e2e"
-BG_CARD = "#2a2a3d"
-FG_TEXT = "#cdd6f4"
-FG_DIM = "#6c7086"
-ACCENT = "#89b4fa"
-ACCENT_HOVER = "#b4d0fb"
-SUCCESS = "#a6e3a1"
-WARNING = "#f9e2af"
-DANGER = "#f38ba8"
-BORDER = "#45475a"
 
-
-def _apply_theme(root):
-    style = ttk.Style(root)
-    style.theme_use('clam')
-    style.configure('.', background=BG_DARK, foreground=FG_TEXT, font=('Segoe UI', 10))
-    style.configure('TNotebook', background=BG_DARK, borderwidth=0)
-    style.configure('TNotebook.Tab', background=BG_CARD, foreground=FG_TEXT,
-                    padding=[16, 8], font=('Segoe UI', 10, 'bold'))
-    style.map('TNotebook.Tab', background=[('selected', ACCENT)], foreground=[('selected', BG_DARK)])
-    style.configure('TFrame', background=BG_DARK)
-    style.configure('Card.TFrame', background=BG_CARD)
-    style.configure('TLabel', background=BG_DARK, foreground=FG_TEXT, font=('Segoe UI', 10))
-    style.configure('Card.TLabel', background=BG_CARD, foreground=FG_TEXT)
-    style.configure('Header.TLabel', font=('Segoe UI', 14, 'bold'), foreground=ACCENT, background=BG_DARK)
-    style.configure('SubHeader.TLabel', font=('Segoe UI', 11, 'bold'), foreground=FG_TEXT, background=BG_DARK)
-    style.configure('Dim.TLabel', foreground=FG_DIM, background=BG_CARD)
-    style.configure('Success.TLabel', foreground=SUCCESS, background=BG_CARD)
-    style.configure('Danger.TLabel', foreground=DANGER, background=BG_CARD)
-    style.configure('TEntry', fieldbackground=BG_CARD, foreground=FG_TEXT,
-                    insertcolor=FG_TEXT, bordercolor=BORDER, borderwidth=1)
-    style.configure('TButton', background=ACCENT, foreground=BG_DARK,
-                    font=('Segoe UI', 10, 'bold'), padding=[12, 6])
-    style.map('TButton', background=[('active', ACCENT_HOVER), ('disabled', BORDER)])
-    style.configure('Danger.TButton', background=DANGER, foreground=BG_DARK)
-    style.map('Danger.TButton', background=[('active', '#f07092')])
-    style.configure('Success.TButton', background=SUCCESS, foreground=BG_DARK)
-    style.map('Success.TButton', background=[('active', '#b6f3b1')])
-    style.configure('Warning.TButton', background=WARNING, foreground=BG_DARK)
-    style.map('Warning.TButton', background=[('active', '#fae8bf')])
-    style.configure('Treeview', background=BG_CARD, foreground=FG_TEXT,
-                    fieldbackground=BG_CARD, borderwidth=0, font=('Segoe UI', 9), rowheight=28)
-    style.configure('Treeview.Heading', background=BORDER, foreground=FG_TEXT,
-                    font=('Segoe UI', 9, 'bold'))
-    style.map('Treeview', background=[('selected', ACCENT)], foreground=[('selected', BG_DARK)])
-    style.configure('TCheckbutton', background=BG_CARD, foreground=FG_TEXT)
-    style.configure('TCombobox', fieldbackground=BG_CARD, foreground=FG_TEXT, background=BG_CARD)
-    style.configure('TLabelframe', background=BG_DARK, foreground=ACCENT, bordercolor=BORDER)
-    style.configure('TLabelframe.Label', background=BG_DARK, foreground=ACCENT, font=('Segoe UI', 10, 'bold'))
-    style.configure('TRadiobutton', background=BG_DARK, foreground=FG_TEXT)
-    style.configure('Card.TRadiobutton', background=BG_CARD, foreground=FG_TEXT)
-    style.configure('Card.TCheckbutton', background=BG_CARD, foreground=FG_TEXT)
-    style.configure('TSpinbox', fieldbackground=BG_CARD, foreground=FG_TEXT, background=BG_CARD)
-
-
-def _run_in_thread_with_output(gui, func, done_msg="Completed."):
-    """Run func in background thread, capture stdout, strip ANSI, show in action_output."""
-    import sys, io
-
-    def worker():
-        captured = io.StringIO()
-        old_stdout = sys.stdout
-        sys.stdout = captured
-        try:
-            func()
-        except Exception as e:
-            captured.write(f"\nError: {e}\n")
-        finally:
-            sys.stdout = old_stdout
-        output = _strip_ansi(captured.getvalue())
-        gui.root.after(0, lambda: gui._action_log(output if output.strip() else done_msg))
-
-    threading.Thread(target=worker, daemon=True).start()
-
-
-class IllumioGUI:
-    def __init__(self, root: tk.Tk, cm: ConfigManager):
-        self.root = root
-        self.cm = cm
-        self.root.title(f"Illumio PCE Monitor v{__version__}")
-        self.root.geometry("1000x700")
-        self.root.minsize(850, 600)
-        self.root.configure(bg=BG_DARK)
-        _apply_theme(self.root)
-
-        # Header
-        header = ttk.Frame(self.root)
-        header.pack(fill='x', padx=16, pady=(12, 0))
-        ttk.Label(header, text=f"◆ Illumio PCE Monitor v{__version__}", style='Header.TLabel').pack(side='left')
-        ttk.Label(header, text=f"API: {self.cm.config['api']['url']}", style='Dim.TLabel').pack(side='right')
-
-        # Notebook
-        self.notebook = ttk.Notebook(self.root)
-        self.notebook.pack(fill='both', expand=True, padx=12, pady=8)
-
-        self._build_dashboard_tab()
-        self._build_rules_tab()
-        self._build_settings_tab()
-        self._build_actions_tab()
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    # Dashboard Tab
-    # ═══════════════════════════════════════════════════════════════════════════
-    def _build_dashboard_tab(self):
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="  Dashboard  ")
-        cards = ttk.Frame(tab)
-        cards.pack(fill='x', padx=8, pady=8)
-        self._stat_api = self._make_card(cards, "API Status", "—", 0)
-        self._stat_rules = self._make_card(cards, "Active Rules", str(len(self.cm.config['rules'])), 1)
-        self._stat_health = self._make_card(cards, "Health Check",
-                                            "ON" if self.cm.config['settings'].get('enable_health_check') else "OFF", 2)
-        self._stat_lang = self._make_card(cards, "Language",
-                                          self.cm.config.get('settings', {}).get('language', 'en').upper(), 3)
-        for i in range(4):
-            cards.columnconfigure(i, weight=1)
-
-        log_frame = ttk.LabelFrame(tab, text="  Activity Log  ")
-        log_frame.pack(fill='both', expand=True, padx=8, pady=(0, 8))
-        self.log_text = scrolledtext.ScrolledText(log_frame, font=('Consolas', 9), bg=BG_CARD, fg=FG_TEXT,
-                                                  insertbackground=FG_TEXT, relief='flat', wrap='word', height=12)
-        self.log_text.pack(fill='both', expand=True, padx=4, pady=4)
-        self._log("Dashboard loaded. Ready.")
-
-        btn_frame = ttk.Frame(tab)
-        btn_frame.pack(fill='x', padx=8, pady=(0, 8))
-        ttk.Button(btn_frame, text="🔗  Test Connection", command=self._test_connection).pack(side='left', padx=4)
-        ttk.Button(btn_frame, text="🔄  Refresh", command=self._refresh_dashboard).pack(side='left', padx=4)
-
-    def _make_card(self, parent, title, value, col):
-        frame = ttk.Frame(parent, style='Card.TFrame')
-        frame.grid(row=0, column=col, padx=4, pady=4, sticky='nsew')
-        frame.configure(borderwidth=1, relief='solid')
-        ttk.Label(frame, text=title, style='Dim.TLabel', font=('Segoe UI', 9)).pack(pady=(8, 2))
-        val_lbl = ttk.Label(frame, text=value, style='Card.TLabel', font=('Segoe UI', 16, 'bold'))
-        val_lbl.pack(pady=(0, 8))
-        return val_lbl
-
-    def _log(self, msg):
-        ts = datetime.datetime.now().strftime('%H:%M:%S')
-        self.log_text.insert('end', f"[{ts}] {_strip_ansi(msg)}\n")
-        self.log_text.see('end')
-
-    def _test_connection(self):
-        self._log("Testing PCE connection...")
-        def worker():
-            from src.api_client import ApiClient
-            try:
-                api = ApiClient(self.cm)
-                status, text = api.check_health()
-                clean = _strip_ansi(text)
-                if status == 200:
-                    self.root.after(0, lambda: self._stat_api.configure(text="Connected", style='Success.TLabel'))
-                    self.root.after(0, lambda: self._log(f"✅ PCE connection OK (HTTP {status})"))
-                else:
-                    self.root.after(0, lambda: self._stat_api.configure(text=f"Error {status}", style='Danger.TLabel'))
-                    self.root.after(0, lambda: self._log(f"❌ PCE connection failed: {status} — {clean[:100]}"))
-            except Exception as e:
-                self.root.after(0, lambda: self._log(f"❌ Error: {e}"))
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _refresh_dashboard(self):
-        self._stat_rules.configure(text=str(len(self.cm.config['rules'])))
-        self._stat_health.configure(text="ON" if self.cm.config['settings'].get('enable_health_check') else "OFF")
-        self._stat_lang.configure(text=self.cm.config.get('settings', {}).get('language', 'en').upper())
-        self._log("Dashboard refreshed.")
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    # Rules Tab — View, Add, Delete
-    # ═══════════════════════════════════════════════════════════════════════════
-    def _build_rules_tab(self):
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="  Rules  ")
-
-        toolbar = ttk.Frame(tab)
-        toolbar.pack(fill='x', padx=8, pady=8)
-        self._rules_count_label = ttk.Label(toolbar, text=f"Rules ({len(self.cm.config['rules'])} total)",
-                                            style='Header.TLabel')
-        self._rules_count_label.pack(side='left')
-        ttk.Button(toolbar, text="🗑  Delete", style='Danger.TButton',
-                   command=self._delete_selected_rule).pack(side='right', padx=4)
-        ttk.Button(toolbar, text="📊  + Bandwidth/Volume", style='Warning.TButton',
-                   command=self._show_add_bw_vol_dialog).pack(side='right', padx=4)
-        ttk.Button(toolbar, text="🚦  + Traffic", style='Warning.TButton',
-                   command=self._show_add_traffic_dialog).pack(side='right', padx=4)
-        ttk.Button(toolbar, text="📋  + Event", style='Warning.TButton',
-                   command=self._show_add_event_dialog).pack(side='right', padx=4)
-
-        cols = ('type', 'name', 'condition', 'filters')
-        self.rule_tree = ttk.Treeview(tab, columns=cols, show='headings', height=16)
-        self.rule_tree.heading('type', text='Type')
-        self.rule_tree.heading('name', text='Name')
-        self.rule_tree.heading('condition', text='Condition')
-        self.rule_tree.heading('filters', text='Filters')
-        self.rule_tree.column('type', width=80)
-        self.rule_tree.column('name', width=200)
-        self.rule_tree.column('condition', width=200)
-        self.rule_tree.column('filters', width=400)
-
-        vsb = ttk.Scrollbar(tab, orient='vertical', command=self.rule_tree.yview)
-        self.rule_tree.configure(yscrollcommand=vsb.set)
-        self.rule_tree.pack(side='left', fill='both', expand=True, padx=(8, 0), pady=(0, 8))
-        vsb.pack(side='left', fill='y', pady=(0, 8), padx=(0, 8))
-
-        self._populate_rules()
-
-    def _populate_rules(self):
-        for item in self.rule_tree.get_children():
-            self.rule_tree.delete(item)
-        for i, r in enumerate(self.cm.config['rules']):
-            rtype = r['type'].capitalize()
-            val = r['threshold_count']
-            unit = {'volume': ' MB', 'bandwidth': ' Mbps', 'traffic': ' conns'}.get(r['type'], '')
-            cond = f"> {val}{unit} (Win:{r.get('threshold_window')}m CD:{r.get('cooldown_minutes', r.get('threshold_window', 10))}m)"
-            filters = []
-            if r['type'] == 'event':
-                filters.append(f"Event: {r.get('filter_value', '')}")
-            pd_map = {2: 'Blocked', 1: 'Potential', 0: 'Allowed', -1: 'All'}
-            if r.get('pd') is not None and r['type'] in ('traffic', 'bandwidth', 'volume'):
-                filters.append(f"PD:{pd_map.get(r['pd'], r['pd'])}")
-            if r.get('port'): filters.append(f"Port:{r['port']}")
-            if r.get('src_label'): filters.append(f"Src:{r['src_label']}")
-            if r.get('dst_label'): filters.append(f"Dst:{r['dst_label']}")
-            if r.get('src_ip_in'): filters.append(f"SrcIP:{r['src_ip_in']}")
-            if r.get('dst_ip_in'): filters.append(f"DstIP:{r['dst_ip_in']}")
-            filter_str = " | ".join(filters) if filters else "—"
-            self.rule_tree.insert('', 'end', iid=str(i), values=(rtype, r['name'], cond, filter_str))
-        self._rules_count_label.configure(text=f"Rules ({len(self.cm.config['rules'])} total)")
-
-    def _delete_selected_rule(self):
-        selected = self.rule_tree.selection()
-        if not selected:
-            messagebox.showwarning("Delete", "Please select a rule first.")
-            return
-        if messagebox.askyesno("Confirm", f"Delete {len(selected)} rule(s)?"):
-            indices = sorted([int(s) for s in selected], reverse=True)
-            self.cm.remove_rules_by_index(indices)
-            self._populate_rules()
-            self._refresh_dashboard()
-
-    # ─── Add Event Rule Dialog ────────────────────────────────────────────
-    def _show_add_event_dialog(self):
-        dlg = tk.Toplevel(self.root)
-        dlg.title("Add Event Rule")
-        dlg.geometry("520x500")
-        dlg.configure(bg=BG_DARK)
-        dlg.transient(self.root)
-        dlg.grab_set()
-
-        ttk.Label(dlg, text="Add Event Rule", style='Header.TLabel').pack(padx=12, pady=(12, 4))
-
-        # Category + Event selection
-        sel_frame = ttk.LabelFrame(dlg, text="  Event Selection  ")
-        sel_frame.pack(fill='x', padx=12, pady=4)
-
-        ttk.Label(sel_frame, text="Category:").pack(anchor='w', padx=8, pady=(4, 0))
-        cat_var = tk.StringVar()
-        cat_combo = ttk.Combobox(sel_frame, textvariable=cat_var, values=list(FULL_EVENT_CATALOG.keys()),
-                                 state='readonly', width=40)
-        cat_combo.pack(padx=8, pady=2, anchor='w')
-
-        ttk.Label(sel_frame, text="Event Type:").pack(anchor='w', padx=8, pady=(4, 0))
-        evt_var = tk.StringVar()
-        evt_combo = ttk.Combobox(sel_frame, textvariable=evt_var, state='readonly', width=50)
-        evt_combo.pack(padx=8, pady=(2, 8), anchor='w')
-
-        def on_cat_change(e=None):
-            cat = cat_var.get()
-            if cat in FULL_EVENT_CATALOG:
-                items = [f"{k} ({v})" for k, v in FULL_EVENT_CATALOG[cat].items()]
-                evt_combo['values'] = items
-                if items:
-                    evt_combo.current(0)
-        cat_combo.bind('<<ComboboxSelected>>', on_cat_change)
-
-        # Threshold
-        th_frame = ttk.LabelFrame(dlg, text="  Threshold  ")
-        th_frame.pack(fill='x', padx=12, pady=4)
-
-        th_type_var = tk.StringVar(value="immediate")
-        r_row = ttk.Frame(th_frame)
-        r_row.pack(fill='x', padx=8, pady=4)
-        ttk.Radiobutton(r_row, text="Immediate Alert", variable=th_type_var, value="immediate").pack(side='left', padx=8)
-        ttk.Radiobutton(r_row, text="Cumulative Count", variable=th_type_var, value="count").pack(side='left', padx=8)
-
-        count_frame = ttk.Frame(th_frame)
-        count_frame.pack(fill='x', padx=8, pady=2)
-        ttk.Label(count_frame, text="Count:").pack(side='left')
-        count_var = tk.StringVar(value="5")
-        ttk.Entry(count_frame, textvariable=count_var, width=8).pack(side='left', padx=4)
-        ttk.Label(count_frame, text="Window (min):").pack(side='left', padx=(12, 0))
-        win_var = tk.StringVar(value="10")
-        ttk.Entry(count_frame, textvariable=win_var, width=8).pack(side='left', padx=4)
-        ttk.Label(count_frame, text="Cooldown (min):").pack(side='left', padx=(12, 0))
-        cd_var = tk.StringVar(value="10")
-        ttk.Entry(count_frame, textvariable=cd_var, width=8).pack(side='left', padx=(4, 8))
-
-        # Health Check toggle
-        hc_var = tk.BooleanVar(value=self.cm.config['settings'].get('enable_health_check', True))
-        ttk.Checkbutton(dlg, text="Enable PCE Health Check", variable=hc_var).pack(anchor='w', padx=16, pady=4)
-
-        # Buttons
-        btn_frame = ttk.Frame(dlg)
-        btn_frame.pack(fill='x', padx=12, pady=12)
-        ttk.Button(btn_frame, text="Cancel", command=dlg.destroy).pack(side='right', padx=4)
-
-        def save():
-            cat = cat_var.get()
-            evt_sel = evt_var.get()
-            if not cat or not evt_sel:
-                messagebox.showwarning("Missing", "Please select a category and event.", parent=dlg)
-                return
-            evt_key = evt_sel.split(" (")[0]
-            evt_name = FULL_EVENT_CATALOG.get(cat, {}).get(evt_key, evt_key)
-            ttype = th_type_var.get()
-            cnt = int(count_var.get() or 1) if ttype == 'count' else 1
-            win = int(win_var.get() or 10)
-            cd = int(cd_var.get() or win)
-            self.cm.config['settings']['enable_health_check'] = hc_var.get()
-            self.cm.add_or_update_rule({
-                "id": int(datetime.datetime.now().timestamp()),
-                "type": "event", "name": evt_name, "filter_key": "event_type", "filter_value": evt_key,
-                "desc": evt_name, "rec": "Check Logs", "threshold_type": ttype,
-                "threshold_count": cnt, "threshold_window": win, "cooldown_minutes": cd
-            })
-            self._populate_rules()
-            self._refresh_dashboard()
-            dlg.destroy()
-
-        ttk.Button(btn_frame, text="💾  Save Rule", style='Success.TButton', command=save).pack(side='right', padx=4)
-
-    # ─── Add Traffic Rule Dialog ──────────────────────────────────────────
-    def _show_add_traffic_dialog(self):
-        dlg = tk.Toplevel(self.root)
-        dlg.title("Add Traffic Rule")
-        dlg.geometry("560x620")
-        dlg.configure(bg=BG_DARK)
-        dlg.transient(self.root)
-        dlg.grab_set()
-
-        ttk.Label(dlg, text="Add Traffic Rule", style='Header.TLabel').pack(padx=12, pady=(12, 4))
-
-        canvas = tk.Canvas(dlg, bg=BG_DARK, highlightthickness=0)
-        vsb = ttk.Scrollbar(dlg, orient='vertical', command=canvas.yview)
-        scroll_frame = ttk.Frame(canvas)
-        scroll_frame.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
-        canvas.create_window((0, 0), window=scroll_frame, anchor='nw')
-        canvas.configure(yscrollcommand=vsb.set)
-        canvas.pack(side='left', fill='both', expand=True, padx=(12, 0), pady=4)
-        vsb.pack(side='right', fill='y', padx=(0, 12), pady=4)
-
-        entries = {}
-
-        def _field(parent, label, key, default='', width=40):
-            row = ttk.Frame(parent)
-            row.pack(fill='x', padx=8, pady=2)
-            ttk.Label(row, text=label, width=22, anchor='w').pack(side='left')
-            e = ttk.Entry(row, width=width)
-            e.insert(0, default)
-            e.pack(side='left', fill='x', expand=True)
-            entries[key] = e
-
-        # Basic
-        basic = ttk.LabelFrame(scroll_frame, text="  Basic  ")
-        basic.pack(fill='x', padx=4, pady=4)
-        _field(basic, "Rule Name", 'name')
-
-        ttk.Label(basic, text="Policy Decision:").pack(anchor='w', padx=8, pady=(4, 0))
-        pd_var = tk.IntVar(value=1)
-        pd_row = ttk.Frame(basic)
-        pd_row.pack(fill='x', padx=8, pady=2)
-        for val, txt in [(1, "Blocked"), (2, "Potential"), (3, "Allowed"), (4, "All")]:
-            ttk.Radiobutton(pd_row, text=txt, variable=pd_var, value=val).pack(side='left', padx=6)
-
-        # Filters
-        filt = ttk.LabelFrame(scroll_frame, text="  Filters  ")
-        filt.pack(fill='x', padx=4, pady=4)
-        _field(filt, "Port", 'port')
-        ttk.Label(filt, text="Protocol:").pack(anchor='w', padx=8, pady=(4, 0))
-        proto_var = tk.IntVar(value=0)
-        proto_row = ttk.Frame(filt)
-        proto_row.pack(fill='x', padx=8, pady=2)
-        for val, txt in [(0, "Both"), (1, "TCP"), (2, "UDP")]:
-            ttk.Radiobutton(proto_row, text=txt, variable=proto_var, value=val).pack(side='left', padx=6)
-        _field(filt, "Source (Label/IP)", 'src')
-        _field(filt, "Destination (Label/IP)", 'dst')
-
-        # Excludes
-        excl = ttk.LabelFrame(scroll_frame, text="  Excludes (Optional)  ")
-        excl.pack(fill='x', padx=4, pady=4)
-        _field(excl, "Exclude Port", 'ex_port')
-        _field(excl, "Exclude Source", 'ex_src')
-        _field(excl, "Exclude Destination", 'ex_dst')
-
-        # Threshold
-        th = ttk.LabelFrame(scroll_frame, text="  Threshold  ")
-        th.pack(fill='x', padx=4, pady=4)
-        _field(th, "Count Threshold", 'threshold', '10', 8)
-        _field(th, "Window (min)", 'window', '10', 8)
-        _field(th, "Cooldown (min)", 'cooldown', '10', 8)
-
-        # Buttons
-        btn_frame = ttk.Frame(scroll_frame)
-        btn_frame.pack(fill='x', padx=4, pady=8)
-        ttk.Button(btn_frame, text="Cancel", command=dlg.destroy).pack(side='right', padx=4)
-
-        def save():
-            name = entries['name'].get().strip()
-            if not name:
-                messagebox.showwarning("Missing", "Rule name is required.", parent=dlg)
-                return
-            pd_sel = pd_var.get()
-            target_pd = {1: 2, 2: 1, 3: 0, 4: -1}[pd_sel]
-            port = entries['port'].get().strip() or None
-            if port:
-                try: port = int(port)
-                except ValueError: port = None
-            proto = {1: 6, 2: 17}.get(proto_var.get())
-            src = entries['src'].get().strip()
-            dst = entries['dst'].get().strip()
-            src_label, src_ip = (src, None) if src and '=' in src else (None, src or None)
-            dst_label, dst_ip = (dst, None) if dst and '=' in dst else (None, dst or None)
-
-            ex_port = entries['ex_port'].get().strip() or None
-            if ex_port:
-                try: ex_port = int(ex_port)
-                except ValueError: ex_port = None
-            ex_src = entries['ex_src'].get().strip()
-            ex_dst = entries['ex_dst'].get().strip()
-            ex_src_label, ex_src_ip = (ex_src, None) if ex_src and '=' in ex_src else (None, ex_src or None)
-            ex_dst_label, ex_dst_ip = (ex_dst, None) if ex_dst and '=' in ex_dst else (None, ex_dst or None)
-
-            cnt = int(entries['threshold'].get() or 10)
-            win = int(entries['window'].get() or 10)
-            cd = int(entries['cooldown'].get() or win)
-            self.cm.add_or_update_rule({
-                "id": int(datetime.datetime.now().timestamp()),
-                "type": "traffic", "name": name, "pd": target_pd,
-                "port": port, "proto": proto,
-                "src_label": src_label, "dst_label": dst_label,
-                "src_ip_in": src_ip, "dst_ip_in": dst_ip,
-                "ex_port": ex_port, "ex_src_label": ex_src_label, "ex_dst_label": ex_dst_label,
-                "ex_src_ip": ex_src_ip, "ex_dst_ip": ex_dst_ip,
-                "desc": name, "rec": "Check Policy", "threshold_type": "count",
-                "threshold_count": cnt, "threshold_window": win, "cooldown_minutes": cd
-            })
-            self._populate_rules()
-            self._refresh_dashboard()
-            dlg.destroy()
-
-        ttk.Button(btn_frame, text="💾  Save Rule", style='Success.TButton', command=save).pack(side='right', padx=4)
-
-    # ─── Add Bandwidth/Volume Rule Dialog ─────────────────────────────────
-    def _show_add_bw_vol_dialog(self):
-        dlg = tk.Toplevel(self.root)
-        dlg.title("Add Bandwidth / Volume Rule")
-        dlg.geometry("560x580")
-        dlg.configure(bg=BG_DARK)
-        dlg.transient(self.root)
-        dlg.grab_set()
-
-        ttk.Label(dlg, text="Add Bandwidth / Volume Rule", style='Header.TLabel').pack(padx=12, pady=(12, 4))
-
-        entries = {}
-
-        def _field(parent, label, key, default='', width=40):
-            row = ttk.Frame(parent)
-            row.pack(fill='x', padx=8, pady=2)
-            ttk.Label(row, text=label, width=22, anchor='w').pack(side='left')
-            e = ttk.Entry(row, width=width)
-            e.insert(0, default)
-            e.pack(side='left', fill='x', expand=True)
-            entries[key] = e
-
-        # Basic
-        basic = ttk.LabelFrame(dlg, text="  Basic  ")
-        basic.pack(fill='x', padx=12, pady=4)
-        _field(basic, "Rule Name", 'name')
-
-        ttk.Label(basic, text="Metric Type:").pack(anchor='w', padx=8, pady=(4, 0))
-        metric_var = tk.IntVar(value=1)
-        m_row = ttk.Frame(basic)
-        m_row.pack(fill='x', padx=8, pady=2)
-        ttk.Radiobutton(m_row, text="Bandwidth (Mbps, Max)", variable=metric_var, value=1).pack(side='left', padx=6)
-        ttk.Radiobutton(m_row, text="Volume (MB, Sum)", variable=metric_var, value=2).pack(side='left', padx=6)
-
-        ttk.Label(basic, text="Policy Decision:").pack(anchor='w', padx=8, pady=(4, 0))
-        pd_var = tk.IntVar(value=4)
-        pd_row = ttk.Frame(basic)
-        pd_row.pack(fill='x', padx=8, pady=2)
-        for val, txt in [(1, "Blocked"), (2, "Potential"), (3, "Allowed"), (4, "All")]:
-            ttk.Radiobutton(pd_row, text=txt, variable=pd_var, value=val).pack(side='left', padx=6)
-
-        # Filters
-        filt = ttk.LabelFrame(dlg, text="  Filters  ")
-        filt.pack(fill='x', padx=12, pady=4)
-        _field(filt, "Port", 'port')
-        _field(filt, "Source (Label/IP)", 'src')
-        _field(filt, "Destination (Label/IP)", 'dst')
-
-        # Threshold
-        th = ttk.LabelFrame(dlg, text="  Threshold  ")
-        th.pack(fill='x', padx=12, pady=4)
-        _field(th, "Threshold Value", 'threshold', '100', 8)
-        _field(th, "Window (min)", 'window', '10', 8)
-        _field(th, "Cooldown (min)", 'cooldown', '30', 8)
-
-        # Buttons
-        btn_frame = ttk.Frame(dlg)
-        btn_frame.pack(fill='x', padx=12, pady=12)
-        ttk.Button(btn_frame, text="Cancel", command=dlg.destroy).pack(side='right', padx=4)
-
-        def save():
-            name = entries['name'].get().strip()
-            if not name:
-                messagebox.showwarning("Missing", "Rule name is required.", parent=dlg)
-                return
-            rtype = "bandwidth" if metric_var.get() == 1 else "volume"
-            pd_sel = pd_var.get()
-            target_pd = {1: 2, 2: 1, 3: 0, 4: -1}[pd_sel]
-            port = entries['port'].get().strip() or None
-            if port:
-                try: port = int(port)
-                except ValueError: port = None
-            src = entries['src'].get().strip()
-            dst = entries['dst'].get().strip()
-            src_label, src_ip = (src, None) if src and '=' in src else (None, src or None)
-            dst_label, dst_ip = (dst, None) if dst and '=' in dst else (None, dst or None)
-            cnt = float(entries['threshold'].get() or 100)
-            win = int(entries['window'].get() or 10)
-            cd = int(entries['cooldown'].get() or 30)
-            self.cm.add_or_update_rule({
-                "id": int(datetime.datetime.now().timestamp()),
-                "type": rtype, "name": name, "pd": target_pd,
-                "port": port, "proto": None,
-                "src_label": src_label, "dst_label": dst_label,
-                "src_ip_in": src_ip, "dst_ip_in": dst_ip,
-                "desc": name, "rec": "Check Logs", "threshold_type": "count",
-                "threshold_count": cnt, "threshold_window": win, "cooldown_minutes": cd
-            })
-            self._populate_rules()
-            self._refresh_dashboard()
-            dlg.destroy()
-
-        ttk.Button(btn_frame, text="💾  Save Rule", style='Success.TButton', command=save).pack(side='right', padx=4)
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    # Settings Tab
-    # ═══════════════════════════════════════════════════════════════════════════
-    def _build_settings_tab(self):
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="  Settings  ")
-
-        canvas = tk.Canvas(tab, bg=BG_DARK, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(tab, orient='vertical', command=canvas.yview)
-        scroll_frame = ttk.Frame(canvas)
-        scroll_frame.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
-        canvas.create_window((0, 0), window=scroll_frame, anchor='nw')
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.pack(side='left', fill='both', expand=True, padx=8, pady=8)
-        scrollbar.pack(side='right', fill='y')
-
-        self._entries = {}
-
-        def _add_field(parent, label, key, default='', show=None):
-            row = ttk.Frame(parent)
-            row.pack(fill='x', padx=12, pady=3)
-            ttk.Label(row, text=label, width=28, anchor='w').pack(side='left')
-            entry = ttk.Entry(row, width=48, show=show)
-            entry.insert(0, default)
-            entry.pack(side='left', fill='x', expand=True)
-            self._entries[key] = entry
-
-        # API
-        api_frame = ttk.LabelFrame(scroll_frame, text="  API Connection  ")
-        api_frame.pack(fill='x', padx=4, pady=4)
-        _add_field(api_frame, "API URL", 'api_url', self.cm.config['api']['url'])
-        _add_field(api_frame, "Org ID", 'api_org', self.cm.config['api']['org_id'])
-        _add_field(api_frame, "API Key", 'api_key', self.cm.config['api']['key'])
-        _add_field(api_frame, "API Secret", 'api_secret', self.cm.config['api']['secret'], show='*')
-        self._ssl_var = tk.BooleanVar(value=self.cm.config['api'].get('verify_ssl', True))
-        ttk.Checkbutton(api_frame, text="Verify SSL", variable=self._ssl_var).pack(anchor='w', padx=12, pady=4)
-
-        # Email
-        email_frame = ttk.LabelFrame(scroll_frame, text="  Email & SMTP  ")
-        email_frame.pack(fill='x', padx=4, pady=4)
-        _add_field(email_frame, "Sender", 'email_sender', self.cm.config['email']['sender'])
-        _add_field(email_frame, "Recipients (comma)", 'email_rcpt', ', '.join(self.cm.config['email']['recipients']))
-        smtp = self.cm.config.get('smtp', {})
-        _add_field(email_frame, "SMTP Host", 'smtp_host', smtp.get('host', 'localhost'))
-        _add_field(email_frame, "SMTP Port", 'smtp_port', str(smtp.get('port', 25)))
-        self._tls_var = tk.BooleanVar(value=smtp.get('enable_tls', False))
-        ttk.Checkbutton(email_frame, text="Enable STARTTLS", variable=self._tls_var).pack(anchor='w', padx=12, pady=2)
-        self._auth_var = tk.BooleanVar(value=smtp.get('enable_auth', False))
-        ttk.Checkbutton(email_frame, text="Enable Auth", variable=self._auth_var).pack(anchor='w', padx=12, pady=2)
-        _add_field(email_frame, "SMTP User", 'smtp_user', smtp.get('user', ''))
-        _add_field(email_frame, "SMTP Password", 'smtp_pass', smtp.get('password', ''), show='*')
-
-        # Alerts
-        alert_frame = ttk.LabelFrame(scroll_frame, text="  Alert Channels  ")
-        alert_frame.pack(fill='x', padx=4, pady=4)
-        active = self.cm.config.get('alerts', {}).get('active', ['mail'])
-        self._mail_var = tk.BooleanVar(value='mail' in active)
-        self._line_var = tk.BooleanVar(value='line' in active)
-        self._wh_var = tk.BooleanVar(value='webhook' in active)
-        ttk.Checkbutton(alert_frame, text="📧  Mail", variable=self._mail_var).pack(anchor='w', padx=12, pady=2)
-        ttk.Checkbutton(alert_frame, text="📱  LINE", variable=self._line_var).pack(anchor='w', padx=12, pady=2)
-        ttk.Checkbutton(alert_frame, text="🔗  Webhook", variable=self._wh_var).pack(anchor='w', padx=12, pady=2)
-        alerts_cfg = self.cm.config.get('alerts', {})
-        _add_field(alert_frame, "LINE Token", 'line_token', alerts_cfg.get('line_channel_access_token', ''))
-        _add_field(alert_frame, "LINE Target ID", 'line_target', alerts_cfg.get('line_target_id', ''))
-        _add_field(alert_frame, "Webhook URL", 'webhook_url', alerts_cfg.get('webhook_url', ''))
-
-        # Language
-        lang_frame = ttk.LabelFrame(scroll_frame, text="  Language  ")
-        lang_frame.pack(fill='x', padx=4, pady=4)
-        self._lang_var = tk.StringVar(value=self.cm.config.get('settings', {}).get('language', 'en'))
-        lang_row = ttk.Frame(lang_frame)
-        lang_row.pack(fill='x', padx=12, pady=4)
-        ttk.Radiobutton(lang_row, text="English", variable=self._lang_var, value="en").pack(side='left', padx=8)
-        ttk.Radiobutton(lang_row, text="繁體中文", variable=self._lang_var, value="zh_TW").pack(side='left', padx=8)
-
-        # Save
-        btn_frame = ttk.Frame(scroll_frame)
-        btn_frame.pack(fill='x', padx=4, pady=8)
-        ttk.Button(btn_frame, text="💾  Save All Settings", style='Success.TButton',
-                   command=self._save_settings).pack(side='right', padx=8)
-
-    def _save_settings(self):
-        try:
-            self.cm.config['api']['url'] = self._entries['api_url'].get().strip()
-            self.cm.config['api']['org_id'] = self._entries['api_org'].get().strip()
-            self.cm.config['api']['key'] = self._entries['api_key'].get().strip()
-            secret = self._entries['api_secret'].get().strip()
-            if secret:
-                self.cm.config['api']['secret'] = secret
-            self.cm.config['api']['verify_ssl'] = self._ssl_var.get()
-            self.cm.config['email']['sender'] = self._entries['email_sender'].get().strip()
-            self.cm.config['email']['recipients'] = [r.strip() for r in self._entries['email_rcpt'].get().split(',') if r.strip()]
-            self.cm.config['smtp']['host'] = self._entries['smtp_host'].get().strip()
-            self.cm.config['smtp']['port'] = int(self._entries['smtp_port'].get().strip() or 25)
-            self.cm.config['smtp']['enable_tls'] = self._tls_var.get()
-            self.cm.config['smtp']['enable_auth'] = self._auth_var.get()
-            self.cm.config['smtp']['user'] = self._entries['smtp_user'].get().strip()
-            smtp_pass = self._entries['smtp_pass'].get().strip()
-            if smtp_pass:
-                self.cm.config['smtp']['password'] = smtp_pass
-            active = []
-            if self._mail_var.get(): active.append('mail')
-            if self._line_var.get(): active.append('line')
-            if self._wh_var.get(): active.append('webhook')
-            self.cm.config.setdefault('alerts', {})['active'] = active
-            self.cm.config['alerts']['line_channel_access_token'] = self._entries['line_token'].get().strip()
-            self.cm.config['alerts']['line_target_id'] = self._entries['line_target'].get().strip()
-            self.cm.config['alerts']['webhook_url'] = self._entries['webhook_url'].get().strip()
-            self.cm.config.setdefault('settings', {})['language'] = self._lang_var.get()
-            self.cm.save()
-            messagebox.showinfo("Saved", "Settings saved successfully!")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save: {e}")
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    # Actions Tab — Run Once, Debug, Test Alert, Best Practices
-    # ═══════════════════════════════════════════════════════════════════════════
-    def _build_actions_tab(self):
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="  Actions  ")
-
-        ttk.Label(tab, text="Quick Actions", style='Header.TLabel').pack(anchor='w', padx=12, pady=(12, 4))
-
-        btn_container = ttk.Frame(tab)
-        btn_container.pack(fill='x', padx=12)
-
-        actions = [
-            ("▶  Run Monitor Once", self._action_run_once),
-            ("🔍  Traffic Rule Debug Mode", self._action_debug_mode),
-            ("📧  Send Test Alert", self._action_test_alert),
-            ("📋  Load Best Practices", self._action_best_practices),
-        ]
-        for text, cmd in actions:
-            ttk.Button(btn_container, text=text, command=cmd).pack(fill='x', pady=3)
-
-        # Output
-        ttk.Label(tab, text="Output", style='Header.TLabel').pack(anchor='w', padx=12, pady=(12, 4))
-        self.action_output = scrolledtext.ScrolledText(tab, font=('Consolas', 9), bg=BG_CARD, fg=FG_TEXT,
-                                                       insertbackground=FG_TEXT, relief='flat', wrap='word', height=16)
-        self.action_output.pack(fill='both', expand=True, padx=12, pady=(0, 12))
-
-    def _action_log(self, msg):
-        ts = datetime.datetime.now().strftime('%H:%M:%S')
-        clean = _strip_ansi(msg)
-        self.action_output.insert('end', f"[{ts}] {clean}\n")
-        self.action_output.see('end')
-
-    def _action_run_once(self):
-        self._action_log("Starting monitoring cycle...")
-
+# ═══════════════════════════════════════════════════════════════════════════════
+# Flask Application Factory
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _create_app(cm: ConfigManager) -> 'Flask':
+    app = Flask(__name__)
+    app.config['JSON_AS_ASCII'] = False
+
+    # ─── Frontend SPA ─────────────────────────────────────────────────────
+    @app.route('/')
+    def index():
+        return _SPA_HTML
+
+    # ─── API: Status ──────────────────────────────────────────────────────
+    @app.route('/api/status')
+    def api_status():
+        cm.load()
+        return jsonify({
+            "version": __version__,
+            "api_url": cm.config['api']['url'],
+            "rules_count": len(cm.config['rules']),
+            "health_check": cm.config['settings'].get('enable_health_check', True),
+            "language": cm.config.get('settings', {}).get('language', 'en')
+        })
+
+    # ─── API: Event Catalog ───────────────────────────────────────────────
+    @app.route('/api/event-catalog')
+    def api_event_catalog():
+        return jsonify(FULL_EVENT_CATALOG)
+
+    # ─── API: Rules CRUD ──────────────────────────────────────────────────
+    @app.route('/api/rules')
+    def api_rules():
+        cm.load()
+        rules = []
+        for i, r in enumerate(cm.config['rules']):
+            rules.append({"index": i, **r})
+        return jsonify(rules)
+
+    @app.route('/api/rules/event', methods=['POST'])
+    def api_add_event_rule():
+        d = request.json
+        cm.add_or_update_rule({
+            "id": int(datetime.datetime.now().timestamp()),
+            "type": "event",
+            "name": d.get('name', ''),
+            "filter_key": "event_type",
+            "filter_value": d.get('filter_value', ''),
+            "desc": d.get('name', ''),
+            "rec": "Check Logs",
+            "threshold_type": d.get('threshold_type', 'immediate'),
+            "threshold_count": int(d.get('threshold_count', 1)),
+            "threshold_window": int(d.get('threshold_window', 10)),
+            "cooldown_minutes": int(d.get('cooldown_minutes', 10))
+        })
+        if d.get('enable_health_check') is not None:
+            cm.config['settings']['enable_health_check'] = bool(d['enable_health_check'])
+            cm.save()
+        return jsonify({"ok": True})
+
+    @app.route('/api/rules/traffic', methods=['POST'])
+    def api_add_traffic_rule():
+        d = request.json
+        src = (d.get('src') or '').strip()
+        dst = (d.get('dst') or '').strip()
+        src_label, src_ip = (src, None) if src and '=' in src else (None, src or None)
+        dst_label, dst_ip = (dst, None) if dst and '=' in dst else (None, dst or None)
+        ex_src = (d.get('ex_src') or '').strip()
+        ex_dst = (d.get('ex_dst') or '').strip()
+        ex_src_label, ex_src_ip = (ex_src, None) if ex_src and '=' in ex_src else (None, ex_src or None)
+        ex_dst_label, ex_dst_ip = (ex_dst, None) if ex_dst and '=' in ex_dst else (None, ex_dst or None)
+        port = d.get('port')
+        if port:
+            try: port = int(port)
+            except (ValueError, TypeError): port = None
+        ex_port = d.get('ex_port')
+        if ex_port:
+            try: ex_port = int(ex_port)
+            except (ValueError, TypeError): ex_port = None
+        proto = d.get('proto')
+        if proto:
+            try: proto = int(proto)
+            except (ValueError, TypeError): proto = None
+
+        cm.add_or_update_rule({
+            "id": int(datetime.datetime.now().timestamp()),
+            "type": "traffic",
+            "name": d.get('name', ''),
+            "pd": int(d.get('pd', 2)),
+            "port": port, "proto": proto,
+            "src_label": src_label, "dst_label": dst_label,
+            "src_ip_in": src_ip, "dst_ip_in": dst_ip,
+            "ex_port": ex_port,
+            "ex_src_label": ex_src_label, "ex_dst_label": ex_dst_label,
+            "ex_src_ip": ex_src_ip, "ex_dst_ip": ex_dst_ip,
+            "desc": d.get('name', ''), "rec": "Check Policy",
+            "threshold_type": "count",
+            "threshold_count": int(d.get('threshold_count', 10)),
+            "threshold_window": int(d.get('threshold_window', 10)),
+            "cooldown_minutes": int(d.get('cooldown_minutes', 10))
+        })
+        return jsonify({"ok": True})
+
+    @app.route('/api/rules/bandwidth', methods=['POST'])
+    def api_add_bw_rule():
+        d = request.json
+        src = (d.get('src') or '').strip()
+        dst = (d.get('dst') or '').strip()
+        src_label, src_ip = (src, None) if src and '=' in src else (None, src or None)
+        dst_label, dst_ip = (dst, None) if dst and '=' in dst else (None, dst or None)
+        port = d.get('port')
+        if port:
+            try: port = int(port)
+            except (ValueError, TypeError): port = None
+
+        cm.add_or_update_rule({
+            "id": int(datetime.datetime.now().timestamp()),
+            "type": d.get('rule_type', 'bandwidth'),
+            "name": d.get('name', ''),
+            "pd": int(d.get('pd', -1)),
+            "port": port, "proto": None,
+            "src_label": src_label, "dst_label": dst_label,
+            "src_ip_in": src_ip, "dst_ip_in": dst_ip,
+            "desc": d.get('name', ''), "rec": "Check Logs",
+            "threshold_type": "count",
+            "threshold_count": float(d.get('threshold_count', 100)),
+            "threshold_window": int(d.get('threshold_window', 10)),
+            "cooldown_minutes": int(d.get('cooldown_minutes', 30))
+        })
+        return jsonify({"ok": True})
+
+    @app.route('/api/rules/<int:idx>')
+    def api_get_rule(idx):
+        cm.load()
+        if 0 <= idx < len(cm.config['rules']):
+            return jsonify({"index": idx, **cm.config['rules'][idx]})
+        return jsonify({"error": "not found"}), 404
+
+    @app.route('/api/rules/<int:idx>', methods=['PUT'])
+    def api_update_rule(idx):
+        d = request.json
+        if 0 <= idx < len(cm.config['rules']):
+            old = cm.config['rules'][idx]
+            old.update(d)
+            # Re-parse label/ip fields for traffic and bw/vol
+            for prefix in ('src', 'dst', 'ex_src', 'ex_dst'):
+                raw = d.get(prefix, '')
+                if raw is not None:
+                    raw = str(raw).strip()
+                    if raw and '=' in raw:
+                        old[prefix + '_label'] = raw
+                        old[prefix + '_ip_in' if 'ex_' not in prefix else prefix + '_ip'] = None
+                    else:
+                        old[prefix + '_label'] = None
+                        if 'ex_' in prefix:
+                            old[prefix + '_ip'] = raw or None
+                        else:
+                            old[prefix + '_ip_in'] = raw or None
+            # Cast numeric fields
+            for k in ('port', 'ex_port', 'proto', 'threshold_count', 'threshold_window', 'cooldown_minutes', 'pd'):
+                if k in old and old[k] is not None:
+                    try: old[k] = int(old[k]) if k != 'threshold_count' else float(old[k])
+                    except (ValueError, TypeError): pass
+            cm.save()
+            return jsonify({"ok": True})
+        return jsonify({"error": "not found"}), 404
+
+    @app.route('/api/rules/<int:idx>', methods=['DELETE'])
+    def api_delete_rule(idx):
+        cm.remove_rules_by_index([idx])
+        return jsonify({"ok": True})
+
+    # ─── API: Settings ────────────────────────────────────────────────────
+    @app.route('/api/settings')
+    def api_get_settings():
+        cm.load()
+        return jsonify({
+            "api": cm.config['api'],
+            "email": cm.config['email'],
+            "smtp": cm.config.get('smtp', {}),
+            "alerts": cm.config.get('alerts', {}),
+            "settings": cm.config.get('settings', {})
+        })
+
+    @app.route('/api/settings', methods=['POST'])
+    def api_save_settings():
+        d = request.json
+        if 'api' in d:
+            for k in ('url', 'org_id', 'key', 'secret', 'verify_ssl'):
+                if k in d['api']:
+                    cm.config['api'][k] = d['api'][k]
+        if 'email' in d:
+            if 'sender' in d['email']:
+                cm.config['email']['sender'] = d['email']['sender']
+            if 'recipients' in d['email']:
+                cm.config['email']['recipients'] = d['email']['recipients']
+        if 'smtp' in d:
+            cm.config.setdefault('smtp', {}).update(d['smtp'])
+        if 'alerts' in d:
+            cm.config.setdefault('alerts', {}).update(d['alerts'])
+        if 'settings' in d:
+            cm.config.setdefault('settings', {}).update(d['settings'])
+        cm.save()
+        return jsonify({"ok": True})
+
+    # ─── API: Actions ─────────────────────────────────────────────────────
+    @app.route('/api/actions/run', methods=['POST'])
+    def api_run_once():
         def work():
             from src.api_client import ApiClient
             from src.reporter import Reporter
             from src.analyzer import Analyzer
-            api = ApiClient(self.cm)
-            rep = Reporter(self.cm)
-            ana = Analyzer(self.cm, api, rep)
+            api = ApiClient(cm)
+            rep = Reporter(cm)
+            ana = Analyzer(cm, api, rep)
             ana.run_analysis()
             rep.send_alerts()
+        output = _capture_stdout(work)
+        return jsonify({"ok": True, "output": output})
 
-        _run_in_thread_with_output(self, work, "✅ Monitoring cycle completed.")
-        self.root.after(5000, self._refresh_dashboard)
+    @app.route('/api/actions/debug', methods=['POST'])
+    def api_debug():
+        d = request.json or {}
+        mins = int(d.get('mins', 30))
+        pd_sel = int(d.get('pd_sel', 3))
+        def work():
+            from src.api_client import ApiClient
+            from src.reporter import Reporter
+            from src.analyzer import Analyzer
+            api = ApiClient(cm)
+            rep = Reporter(cm)
+            ana = Analyzer(cm, api, rep)
+            ana.run_debug_mode(mins=mins, pd_sel=pd_sel)
+        output = _capture_stdout(work)
+        return jsonify({"ok": True, "output": output})
 
-    def _action_debug_mode(self):
-        # Show debug config dialog
-        dlg = tk.Toplevel(self.root)
-        dlg.title("Traffic Rule Debug Mode")
-        dlg.geometry("400x200")
-        dlg.configure(bg=BG_DARK)
-        dlg.transient(self.root)
-        dlg.grab_set()
-
-        ttk.Label(dlg, text="Debug Mode Settings", style='Header.TLabel').pack(padx=12, pady=(12, 8))
-
-        row1 = ttk.Frame(dlg)
-        row1.pack(fill='x', padx=12, pady=4)
-        ttk.Label(row1, text="Query Window (min):", width=22).pack(side='left')
-        mins_var = tk.StringVar(value="30")
-        ttk.Entry(row1, textvariable=mins_var, width=8).pack(side='left')
-
-        row2 = ttk.Frame(dlg)
-        row2.pack(fill='x', padx=12, pady=4)
-        ttk.Label(row2, text="Policy Decision:", width=22).pack(side='left')
-        pd_debug_var = tk.IntVar(value=3)
-        for val, txt in [(1, "Blocked"), (2, "Allowed"), (3, "All")]:
-            ttk.Radiobutton(row2, text=txt, variable=pd_debug_var, value=val).pack(side='left', padx=4)
-
-        btn_frame = ttk.Frame(dlg)
-        btn_frame.pack(fill='x', padx=12, pady=12)
-        ttk.Button(btn_frame, text="Cancel", command=dlg.destroy).pack(side='right', padx=4)
-
-        def run_debug():
-            mins = int(mins_var.get() or 30)
-            pd_sel = pd_debug_var.get()
-            dlg.destroy()
-            self._action_log(f"Running debug mode (window={mins}m, pd={pd_sel})...")
-
-            def work():
-                from src.api_client import ApiClient
-                from src.reporter import Reporter
-                from src.analyzer import Analyzer
-                api = ApiClient(self.cm)
-                rep = Reporter(self.cm)
-                ana = Analyzer(self.cm, api, rep)
-                ana.run_debug_mode(mins=mins, pd_sel=pd_sel)
-
-            _run_in_thread_with_output(self, work, "✅ Debug mode completed.")
-
-        ttk.Button(btn_frame, text="🔍  Run Debug", style='Success.TButton', command=run_debug).pack(side='right', padx=4)
-
-    def _action_test_alert(self):
-        self._action_log("Sending test alert...")
-
+    @app.route('/api/actions/test-alert', methods=['POST'])
+    def api_test_alert():
         def work():
             from src.reporter import Reporter
-            Reporter(self.cm).send_alerts(force_test=True)
+            Reporter(cm).send_alerts(force_test=True)
+        output = _capture_stdout(work)
+        return jsonify({"ok": True, "output": output})
 
-        _run_in_thread_with_output(self, work, "✅ Test alert dispatched.")
+    @app.route('/api/actions/best-practices', methods=['POST'])
+    def api_best_practices():
+        output = _capture_stdout(lambda: cm.load_best_practices())
+        return jsonify({"ok": True, "output": output})
 
-    def _action_best_practices(self):
-        if messagebox.askyesno("Confirm", "This will clear all existing rules and load best practices. Continue?"):
-            self.cm.load_best_practices()
-            self._populate_rules()
-            self._refresh_dashboard()
-            self._action_log("✅ Best practices loaded.")
+    @app.route('/api/actions/test-connection', methods=['POST'])
+    def api_test_conn():
+        try:
+            from src.api_client import ApiClient
+            api = ApiClient(cm)
+            status, body = api.check_health()
+            return jsonify({"ok": status == 200, "status": status, "body": _strip_ansi(str(body)[:500])})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)})
 
-
-def launch_gui(cm: ConfigManager = None):
-    """Launch the tkinter GUI. Provides clear error on Linux if python3-tk is missing."""
-    if not HAS_TK:
-        import platform
-        msg = "tkinter is not available.\n"
-        if platform.system() == 'Linux':
-            msg += "Install it with:\n"
-            msg += "  Ubuntu/Debian: sudo apt install python3-tk\n"
-            msg += "  RHEL/Rocky:    sudo dnf install python3-tkinter\n"
+    @app.route('/api/shutdown', methods=['POST'])
+    def api_shutdown():
+        func = request.environ.get('werkzeug.server.shutdown')
+        if func:
+            func()
         else:
-            msg += "Reinstall Python with tcl/tk support.\n"
-        print(msg)
+            os._exit(0)
+        return jsonify({"ok": True})
+
+    return app
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Launch
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def launch_gui(cm: ConfigManager = None, host='0.0.0.0', port=5001):
+    if not HAS_FLASK:
+        print("Flask is not installed. The Web GUI requires Flask.")
+        print("Install it with:")
+        print("  pip install flask")
         return
 
     if cm is None:
         cm = ConfigManager()
-    root = tk.Tk()
-    IllumioGUI(root, cm)
-    root.mainloop()
+
+    app = _create_app(cm)
+    print(f"\n  Illumio PCE Monitor — Web GUI")
+    print(f"  Open in browser: http://127.0.0.1:{port}")
+    print(f"  Press Ctrl+C to stop.\n")
+
+    import webbrowser
+    threading.Timer(1.5, lambda: webbrowser.open(f'http://127.0.0.1:{port}')).start()
+    app.run(host=host, port=port, debug=False, use_reloader=False)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Embedded SPA HTML
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SPA_HTML = r'''<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Illumio PCE Monitor</title>
+<style>
+:root {
+  --bg: #0f0f1a; --bg2: #1a1a2e; --bg3: #252540;
+  --fg: #e0e0f0; --dim: #6c7086; --accent: #7c3aed;
+  --accent2: #a78bfa; --success: #34d399; --warn: #fbbf24;
+  --danger: #f87171; --border: #2d2d44;
+  --radius: 10px; --shadow: 0 4px 24px rgba(0,0,0,.4);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--fg); min-height:100vh; }
+a { color:var(--accent2); }
+
+/* Header */
+.header { background:linear-gradient(135deg,var(--bg2),var(--bg3)); padding:16px 28px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); }
+.header h1 { font-size:1.3rem; font-weight:700; background:linear-gradient(135deg,var(--accent2),var(--success)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.header .meta { color:var(--dim); font-size:.85rem; }
+
+/* Tabs */
+.tabs { display:flex; gap:2px; background:var(--bg2); padding:6px 20px 0; border-bottom:1px solid var(--border); }
+.tab { padding:10px 22px; cursor:pointer; border-radius:var(--radius) var(--radius) 0 0; color:var(--dim); font-weight:600; font-size:.9rem; transition:.2s; border:1px solid transparent; border-bottom:none; }
+.tab:hover { color:var(--fg); background:var(--bg3); }
+.tab.active { color:var(--accent2); background:var(--bg); border-color:var(--border); }
+
+/* Panel */
+.panel { display:none; padding:24px; animation:fadeIn .2s; }
+.panel.active { display:block; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+/* Cards */
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-bottom:20px; }
+.card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:18px; text-align:center; }
+.card .label { color:var(--dim); font-size:.8rem; margin-bottom:6px; }
+.card .value { font-size:1.8rem; font-weight:700; color:var(--accent2); }
+.card .value.ok { color:var(--success); }
+.card .value.err { color:var(--danger); }
+
+/* Buttons */
+.btn { display:inline-flex; align-items:center; gap:6px; padding:9px 18px; border:none; border-radius:8px; font-size:.88rem; font-weight:600; cursor:pointer; transition:.15s; }
+.btn-primary { background:var(--accent); color:#fff; }
+.btn-primary:hover { background:var(--accent2); }
+.btn-success { background:#059669; color:#fff; }
+.btn-success:hover { background:var(--success); color:#000; }
+.btn-danger { background:#dc2626; color:#fff; }
+.btn-danger:hover { background:var(--danger); }
+.btn-warn { background:#d97706; color:#fff; }
+.btn-warn:hover { background:var(--warn); color:#000; }
+.btn-sm { padding:6px 12px; font-size:.8rem; }
+.btn:disabled { opacity:.5; cursor:not-allowed; }
+
+/* Forms */
+.form-group { margin-bottom:12px; }
+.form-group label { display:block; color:var(--dim); font-size:.82rem; margin-bottom:4px; font-weight:600; }
+.form-group input, .form-group select { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--fg); padding:8px 12px; border-radius:6px; font-size:.9rem; }
+.form-group input:focus, .form-group select:focus { outline:none; border-color:var(--accent); }
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.form-row-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+
+/* Fieldset */
+fieldset { border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:16px; }
+legend { color:var(--accent2); font-weight:700; font-size:.9rem; padding:0 8px; }
+
+/* Table */
+.rule-table { width:100%; border-collapse:collapse; margin-top:12px; }
+.rule-table th, .rule-table td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--border); font-size:.88rem; }
+.rule-table th { color:var(--dim); font-weight:600; background:var(--bg2); }
+.rule-table tr:hover td { background:var(--bg3); }
+
+/* Log */
+.log-box { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:14px; font-family:'Cascadia Code','Fira Code',monospace; font-size:.82rem; color:var(--fg); max-height:360px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; line-height:1.6; }
+
+/* Actions */
+.action-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-bottom:20px; }
+.action-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:18px; display:flex; flex-direction:column; gap:10px; }
+.action-card h3 { font-size:.95rem; color:var(--accent2); }
+.action-card p { font-size:.8rem; color:var(--dim); flex:1; }
+
+/* Modal */
+.modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:100; align-items:center; justify-content:center; }
+.modal-bg.show { display:flex; }
+.modal { background:var(--bg); border:1px solid var(--border); border-radius:14px; padding:24px; width:560px; max-width:95vw; max-height:85vh; overflow-y:auto; box-shadow:var(--shadow); }
+.modal h2 { font-size:1.1rem; color:var(--accent2); margin-bottom:16px; }
+.modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+
+/* Toolbar */
+.toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; align-items:center; }
+.toolbar .spacer { flex:1; }
+.badge { background:var(--accent); color:#fff; padding:2px 10px; border-radius:20px; font-size:.78rem; font-weight:700; }
+
+/* Radio group */
+.radio-group { display:flex; gap:12px; flex-wrap:wrap; }
+.radio-group label { display:flex; align-items:center; gap:4px; color:var(--fg); font-size:.88rem; cursor:pointer; }
+.radio-group input[type=radio] { accent-color:var(--accent); }
+
+/* Checkbox */
+.chk label { display:flex; align-items:center; gap:6px; color:var(--fg); font-size:.88rem; cursor:pointer; }
+.chk input[type=checkbox] { accent-color:var(--accent); }
+
+/* Toast */
+.toast { position:fixed; bottom:24px; right:24px; background:var(--success); color:#000; padding:12px 20px; border-radius:8px; font-weight:600; font-size:.88rem; z-index:200; opacity:0; transition:.3s; pointer-events:none; }
+.toast.show { opacity:1; }
+.toast.err { background:var(--danger); color:#fff; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>◆ Illumio PCE Monitor</h1>
+  <div style="display:flex;align-items:center;gap:14px"><span class="meta" id="hdr-meta">Loading...</span><button class="btn btn-danger btn-sm" onclick="stopGui()" title="Stop Web GUI">⏹ Stop</button></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('dashboard')">Dashboard</div>
+  <div class="tab" onclick="switchTab('rules')">Rules</div>
+  <div class="tab" onclick="switchTab('settings')">Settings</div>
+  <div class="tab" onclick="switchTab('actions')">Actions</div>
+</div>
+
+<!-- ═══ Dashboard ═══ -->
+<div class="panel active" id="p-dashboard">
+  <div class="cards">
+    <div class="card"><div class="label">API Status</div><div class="value" id="d-api">—</div></div>
+    <div class="card"><div class="label">Active Rules</div><div class="value" id="d-rules">—</div></div>
+    <div class="card"><div class="label">Health Check</div><div class="value" id="d-health">—</div></div>
+    <div class="card"><div class="label">Language</div><div class="value" id="d-lang">—</div></div>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:14px;">
+    <button class="btn btn-primary" onclick="testConn()">🔗 Test Connection</button>
+    <button class="btn btn-primary" onclick="loadDashboard()">🔄 Refresh</button>
+  </div>
+  <div class="log-box" id="d-log">[Ready]</div>
+</div>
+
+<!-- ═══ Rules ═══ -->
+<div class="panel" id="p-rules">
+  <div class="toolbar">
+    <span style="font-size:1.1rem;font-weight:700;color:var(--accent2)">Rules</span>
+    <span class="badge" id="r-badge">0</span>
+    <div class="spacer"></div>
+    <button class="btn btn-warn btn-sm" onclick="openModal('m-event')">📋 + Event</button>
+    <button class="btn btn-warn btn-sm" onclick="openModal('m-traffic')">🚦 + Traffic</button>
+    <button class="btn btn-warn btn-sm" onclick="openModal('m-bw')">📊 + BW/Vol</button>
+    <button class="btn btn-danger btn-sm" onclick="deleteSelected()">🗑 Delete</button>
+  </div>
+  <table class="rule-table">
+    <thead><tr><th style="width:30px"><input type="checkbox" id="r-chkall" onchange="toggleAll(this)"></th><th>Type</th><th>Name</th><th>Condition</th><th>Filters</th><th style="width:50px">Edit</th></tr></thead>
+    <tbody id="r-body"></tbody>
+  </table>
+</div>
+
+<!-- ═══ Settings ═══ -->
+<div class="panel" id="p-settings">
+  <div id="s-form"></div>
+  <div style="text-align:right;margin-top:16px;">
+    <button class="btn btn-success" onclick="saveSettings()">💾 Save All Settings</button>
+  </div>
+</div>
+
+<!-- ═══ Actions ═══ -->
+<div class="panel" id="p-actions">
+  <div class="action-grid">
+    <div class="action-card"><h3>▶ Run Monitor Once</h3><p>Execute full cycle: Health → Fetch → Analyze → Alert</p><button class="btn btn-primary" onclick="runAction('run')">Run</button></div>
+    <div class="action-card"><h3>🔍 Debug Mode</h3><p>Sandbox mode — no alerts, no state updates</p>
+      <div class="form-row" style="margin-bottom:8px;">
+        <div class="form-group"><label>Window (min)</label><input id="a-debug-mins" value="30"></div>
+        <div class="form-group"><label>Policy Dec.</label><select id="a-debug-pd"><option value="1">Blocked</option><option value="2">Allowed</option><option value="3" selected>All</option></select></div>
+      </div>
+      <button class="btn btn-primary" onclick="runDebug()">Run Debug</button>
+    </div>
+    <div class="action-card"><h3>📧 Send Test Alert</h3><p>Verify Email / LINE / Webhook delivery</p><button class="btn btn-primary" onclick="runAction('test-alert')">Send</button></div>
+    <div class="action-card"><h3>📋 Load Best Practices</h3><p>Replace ALL existing rules with recommended defaults</p><button class="btn btn-danger" onclick="confirmBestPractices()">Load</button></div>
+  </div>
+  <h3 style="color:var(--accent2);margin-bottom:8px;">Output</h3>
+  <div class="log-box" id="a-log"></div>
+</div>
+
+<!-- ═══ Modals ═══ -->
+<!-- Event -->
+<div class="modal-bg" id="m-event"><div class="modal">
+  <h2>Add Event Rule</h2>
+  <div class="form-group"><label>Category</label><select id="ev-cat" onchange="populateEvents()"><option value="">Select...</option></select></div>
+  <div class="form-group"><label>Event Type</label><select id="ev-type"><option value="">Select category first</option></select></div>
+  <fieldset><legend>Threshold</legend>
+    <div class="form-group"><label>Type</label><div class="radio-group"><label><input type="radio" name="ev-tt" value="immediate" checked> Immediate</label><label><input type="radio" name="ev-tt" value="count"> Cumulative</label></div></div>
+    <div class="form-row-3">
+      <div class="form-group"><label>Count</label><input id="ev-cnt" type="number" value="5"></div>
+      <div class="form-group"><label>Window (min)</label><input id="ev-win" type="number" value="10"></div>
+      <div class="form-group"><label>Cooldown (min)</label><input id="ev-cd" type="number" value="10"></div>
+    </div>
+  </fieldset>
+  <div class="chk"><label><input type="checkbox" id="ev-hc" checked> Enable PCE Health Check</label></div>
+  <div class="modal-actions"><button class="btn btn-primary" onclick="closeModal('m-event')">Cancel</button><button class="btn btn-success" onclick="saveEvent()">💾 Save</button></div>
+</div></div>
+
+<!-- Traffic -->
+<div class="modal-bg" id="m-traffic"><div class="modal">
+  <h2>Add Traffic Rule</h2>
+  <div class="form-group"><label>Rule Name</label><input id="tr-name"></div>
+  <fieldset><legend>Policy Decision</legend><div class="radio-group">
+    <label><input type="radio" name="tr-pd" value="2" checked> Blocked</label>
+    <label><input type="radio" name="tr-pd" value="1"> Potential</label>
+    <label><input type="radio" name="tr-pd" value="0"> Allowed</label>
+    <label><input type="radio" name="tr-pd" value="-1"> All</label>
+  </div></fieldset>
+  <fieldset><legend>Filters</legend>
+    <div class="form-row"><div class="form-group"><label>Port</label><input id="tr-port" placeholder="e.g. 443"></div><div class="form-group"><label>Protocol</label><select id="tr-proto"><option value="">Both</option><option value="6">TCP</option><option value="17">UDP</option></select></div></div>
+    <div class="form-row"><div class="form-group"><label>Source (Label/IP)</label><input id="tr-src" placeholder="e.g. role=Web or 10.0.0.1"></div><div class="form-group"><label>Destination (Label/IP)</label><input id="tr-dst"></div></div>
+  </fieldset>
+  <fieldset><legend>Excludes (Optional)</legend>
+    <div class="form-row-3"><div class="form-group"><label>Port</label><input id="tr-expt"></div><div class="form-group"><label>Source</label><input id="tr-exsrc"></div><div class="form-group"><label>Destination</label><input id="tr-exdst"></div></div>
+  </fieldset>
+  <fieldset><legend>Threshold</legend>
+    <div class="form-row-3"><div class="form-group"><label>Count</label><input id="tr-cnt" type="number" value="10"></div><div class="form-group"><label>Window (min)</label><input id="tr-win" type="number" value="10"></div><div class="form-group"><label>Cooldown (min)</label><input id="tr-cd" type="number" value="10"></div></div>
+  </fieldset>
+  <div class="modal-actions"><button class="btn btn-primary" onclick="closeModal('m-traffic')">Cancel</button><button class="btn btn-success" onclick="saveTraffic()">💾 Save</button></div>
+</div></div>
+
+<!-- BW/Volume -->
+<div class="modal-bg" id="m-bw"><div class="modal">
+  <h2>Add Bandwidth / Volume Rule</h2>
+  <div class="form-group"><label>Rule Name</label><input id="bw-name"></div>
+  <fieldset><legend>Metric Type</legend><div class="radio-group">
+    <label><input type="radio" name="bw-mt" value="bandwidth" checked> Bandwidth (Mbps, Max)</label>
+    <label><input type="radio" name="bw-mt" value="volume"> Volume (MB, Sum)</label>
+  </div></fieldset>
+  <fieldset><legend>Policy Decision</legend><div class="radio-group">
+    <label><input type="radio" name="bw-pd" value="2"> Blocked</label>
+    <label><input type="radio" name="bw-pd" value="1"> Potential</label>
+    <label><input type="radio" name="bw-pd" value="0"> Allowed</label>
+    <label><input type="radio" name="bw-pd" value="-1" checked> All</label>
+  </div></fieldset>
+  <fieldset><legend>Filters</legend>
+    <div class="form-row-3"><div class="form-group"><label>Port</label><input id="bw-port"></div><div class="form-group"><label>Source</label><input id="bw-src"></div><div class="form-group"><label>Destination</label><input id="bw-dst"></div></div>
+  </fieldset>
+  <fieldset><legend>Threshold</legend>
+    <div class="form-row-3"><div class="form-group"><label>Value</label><input id="bw-val" type="number" value="100"></div><div class="form-group"><label>Window (min)</label><input id="bw-win" type="number" value="10"></div><div class="form-group"><label>Cooldown (min)</label><input id="bw-cd" type="number" value="30"></div></div>
+  </fieldset>
+  <div class="modal-actions"><button class="btn btn-primary" onclick="closeModal('m-bw')">Cancel</button><button class="btn btn-success" onclick="saveBW()">💾 Save</button></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ─── Helpers ─────────────────────────────────────────────────────── */
+const $=s=>document.getElementById(s);
+const api=async(url,opt)=>{const r=await fetch(url,opt);return r.json()};
+const post=(url,body)=>api(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+const put=(url,body)=>api(url,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+const del=url=>api(url,{method:'DELETE'});
+const rv=name=>document.querySelector(`input[name="${name}"]:checked`)?.value;
+const setRv=(name,val)=>{const r=document.querySelector(`input[name="${name}"][value="${val}"]`);if(r)r.checked=true};
+let _editIdx=null; // null = add mode, number = edit mode
+
+function toast(msg,err){const t=$('toast');t.textContent=msg;t.className='toast'+(err?' err':'')+' show';setTimeout(()=>t.className='toast',3000)}
+function dlog(msg){const l=$('d-log');l.textContent+='\n['+new Date().toLocaleTimeString()+'] '+msg;l.scrollTop=l.scrollHeight}
+function alog(msg){const l=$('a-log');l.textContent+='\n'+msg;l.scrollTop=l.scrollHeight}
+
+/* ─── Tabs ────────────────────────────────────────────────────────── */
+function switchTab(id){
+  document.querySelectorAll('.tab').forEach((t,i)=>{t.classList.toggle('active',t.textContent.trim().toLowerCase().startsWith(id.slice(0,4)))});
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  $('p-'+id).classList.add('active');
+  if(id==='rules') loadRules();
+  if(id==='settings') loadSettings();
+  if(id==='dashboard') loadDashboard();
+}
+
+/* ─── Dashboard ───────────────────────────────────────────────────── */
+async function loadDashboard(){
+  const d=await api('/api/status');
+  $('hdr-meta').textContent=`v${d.version} | ${d.api_url}`;
+  $('d-rules').textContent=d.rules_count;
+  $('d-health').textContent=d.health_check?'ON':'OFF';
+  $('d-lang').textContent=(d.language||'en').toUpperCase();
+}
+async function testConn(){
+  dlog('Testing PCE connection...');
+  const r=await post('/api/actions/test-connection',{});
+  if(r.ok){$('d-api').textContent='Connected';$('d-api').className='value ok';dlog('✅ Connected (HTTP '+r.status+')')}
+  else{$('d-api').textContent='Error';$('d-api').className='value err';dlog('❌ '+( r.error||r.body))}
+}
+
+/* ─── Rules ───────────────────────────────────────────────────────── */
+let _catalog={};
+async function loadRules(){
+  const rules=await api('/api/rules');
+  $('r-badge').textContent=rules.length;
+  const pdm={2:'Blocked',1:'Potential',0:'Allowed','-1':'All'};
+  let html='';
+  rules.forEach(r=>{
+    const typ=r.type.charAt(0).toUpperCase()+r.type.slice(1);
+    const unit={volume:' MB',bandwidth:' Mbps',traffic:' conns'}[r.type]||'';
+    const cond='> '+r.threshold_count+unit+' (Win:'+r.threshold_window+'m CD:'+(r.cooldown_minutes||r.threshold_window)+'m)';
+    let f=[];
+    if(r.type==='event') f.push('Event: '+r.filter_value);
+    if(r.pd!==undefined&&r.pd!==null) f.push('PD:'+( pdm[r.pd]||r.pd));
+    if(r.port) f.push('Port:'+r.port);
+    if(r.src_label) f.push('Src:'+r.src_label);if(r.dst_label) f.push('Dst:'+r.dst_label);
+    if(r.src_ip_in) f.push('SrcIP:'+r.src_ip_in);if(r.dst_ip_in) f.push('DstIP:'+r.dst_ip_in);
+    html+=`<tr><td><input type="checkbox" class="r-chk" data-idx="${r.index}"></td><td>${typ}</td><td>${r.name}</td><td>${cond}</td><td>${f.join(' | ')||'—'}</td><td><button class="btn btn-primary btn-sm" onclick="editRule(${r.index},'${r.type}')">✏️</button></td></tr>`;
+  });
+  $('r-body').innerHTML=html||'<tr><td colspan="6" style="color:var(--dim);text-align:center;padding:24px">No rules. Add one above.</td></tr>';
+}
+function toggleAll(el){document.querySelectorAll('.r-chk').forEach(c=>c.checked=el.checked)}
+async function deleteSelected(){
+  const ids=[...document.querySelectorAll('.r-chk:checked')].map(c=>parseInt(c.dataset.idx)).sort((a,b)=>b-a);
+  if(!ids.length){toast('Select rules first','err');return}
+  if(!confirm('Delete '+ids.length+' rule(s)?'))return;
+  for(const i of ids) await del('/api/rules/'+i);
+  toast('Deleted');loadRules();loadDashboard();
+}
+function openModal(id,isEdit){_editIdx=isEdit??null;$(id).classList.add('show');if(id==='m-event'&&!Object.keys(_catalog).length)loadCatalog();
+  // Update modal title
+  const h=$(id).querySelector('h2');
+  if(h){const base=h.textContent.replace(/^(Edit|Add) /,'');h.textContent=(_editIdx!==null?'Edit ':'Add ')+base}
+}
+function closeModal(id){$(id).classList.remove('show');_editIdx=null}
+async function loadCatalog(){
+  _catalog=await api('/api/event-catalog');
+  const sel=$('ev-cat');sel.innerHTML='<option value="">Select...</option>';
+  Object.keys(_catalog).forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o)});
+}
+function populateEvents(){
+  const cat=$('ev-cat').value;const sel=$('ev-type');sel.innerHTML='';
+  if(!cat||!_catalog[cat]){sel.innerHTML='<option>Select category first</option>';return}
+  Object.entries(_catalog[cat]).forEach(([k,v])=>{const o=document.createElement('option');o.value=k;o.textContent=k+' ('+v+')';sel.appendChild(o)});
+}
+
+/* ─── Edit Rule ───────────────────────────────────────────────────── */
+async function editRule(idx,type){
+  const r=await api('/api/rules/'+idx);
+  if(r.error){toast('Rule not found','err');return}
+  if(type==='event'){
+    await loadCatalog();
+    // Find and select category
+    for(const[cat,evts] of Object.entries(_catalog)){
+      if(r.filter_value in evts){$('ev-cat').value=cat;populateEvents();$('ev-type').value=r.filter_value;break}
+    }
+    setRv('ev-tt',r.threshold_type||'immediate');
+    $('ev-cnt').value=r.threshold_count||5;
+    $('ev-win').value=r.threshold_window||10;
+    $('ev-cd').value=r.cooldown_minutes||10;
+    openModal('m-event',idx);
+  } else if(type==='traffic'){
+    $('tr-name').value=r.name||'';
+    setRv('tr-pd',String(r.pd??2));
+    $('tr-port').value=r.port||'';
+    $('tr-proto').value=r.proto?String(r.proto):'';
+    $('tr-src').value=r.src_label||r.src_ip_in||'';
+    $('tr-dst').value=r.dst_label||r.dst_ip_in||'';
+    $('tr-expt').value=r.ex_port||'';
+    $('tr-exsrc').value=r.ex_src_label||r.ex_src_ip||'';
+    $('tr-exdst').value=r.ex_dst_label||r.ex_dst_ip||'';
+    $('tr-cnt').value=r.threshold_count||10;
+    $('tr-win').value=r.threshold_window||10;
+    $('tr-cd').value=r.cooldown_minutes||10;
+    openModal('m-traffic',idx);
+  } else {
+    $('bw-name').value=r.name||'';
+    setRv('bw-mt',r.type||'bandwidth');
+    setRv('bw-pd',String(r.pd??-1));
+    $('bw-port').value=r.port||'';
+    $('bw-src').value=r.src_label||r.src_ip_in||'';
+    $('bw-dst').value=r.dst_label||r.dst_ip_in||'';
+    $('bw-val').value=r.threshold_count||100;
+    $('bw-win').value=r.threshold_window||10;
+    $('bw-cd').value=r.cooldown_minutes||30;
+    openModal('m-bw',idx);
+  }
+}
+
+async function saveEvent(){
+  const cat=$('ev-cat').value,ev=$('ev-type').value;
+  if(!cat||!ev){toast('Select category and event','err');return}
+  const name=(_catalog[cat]||{})[ev]||ev;
+  const data={name,filter_value:ev,threshold_type:rv('ev-tt'),threshold_count:$('ev-cnt').value,threshold_window:$('ev-win').value,cooldown_minutes:$('ev-cd').value,enable_health_check:$('ev-hc').checked};
+  if(_editIdx!==null) await put('/api/rules/'+_editIdx,data); else await post('/api/rules/event',data);
+  closeModal('m-event');toast('Event rule saved');loadRules();loadDashboard();
+}
+async function saveTraffic(){
+  const name=$('tr-name').value.trim();if(!name){toast('Name required','err');return}
+  const data={name,pd:rv('tr-pd'),port:$('tr-port').value,proto:$('tr-proto').value,src:$('tr-src').value,dst:$('tr-dst').value,ex_port:$('tr-expt').value,ex_src:$('tr-exsrc').value,ex_dst:$('tr-exdst').value,threshold_count:$('tr-cnt').value,threshold_window:$('tr-win').value,cooldown_minutes:$('tr-cd').value};
+  if(_editIdx!==null) await put('/api/rules/'+_editIdx,data); else await post('/api/rules/traffic',data);
+  closeModal('m-traffic');toast('Traffic rule saved');loadRules();loadDashboard();
+}
+async function saveBW(){
+  const name=$('bw-name').value.trim();if(!name){toast('Name required','err');return}
+  const data={name,rule_type:rv('bw-mt'),pd:rv('bw-pd'),port:$('bw-port').value,src:$('bw-src').value,dst:$('bw-dst').value,threshold_count:$('bw-val').value,threshold_window:$('bw-win').value,cooldown_minutes:$('bw-cd').value};
+  if(_editIdx!==null) await put('/api/rules/'+_editIdx,{...data,type:data.rule_type}); else await post('/api/rules/bandwidth',data);
+  closeModal('m-bw');toast('Rule saved');loadRules();loadDashboard();
+}
+
+function confirmBestPractices(){
+  if(!confirm('⚠️ WARNING: This will DELETE all existing rules and replace them with best practice defaults.\n\nAre you sure you want to continue?')) return;
+  if(!confirm('This action cannot be undone. Confirm once more to proceed.')) return;
+  runAction('best-practices');
+}
+
+/* ─── Settings ────────────────────────────────────────────────────── */
+let _settings={};
+async function loadSettings(){
+  _settings=await api('/api/settings');
+  const s=_settings,a=s.api||{},e=s.email||{},sm=s.smtp||{},al=s.alerts||{},st=s.settings||{};
+  const active=al.active||[];
+  $('s-form').innerHTML=`
+  <fieldset><legend>API Connection</legend>
+    <div class="form-row"><div class="form-group"><label>URL</label><input id="s-url" value="${a.url||''}"></div><div class="form-group"><label>Org ID</label><input id="s-org" value="${a.org_id||''}"></div></div>
+    <div class="form-row"><div class="form-group"><label>API Key</label><input id="s-key" value="${a.key||''}"></div><div class="form-group"><label>API Secret</label><input id="s-sec" type="password" value="${a.secret||''}"></div></div>
+    <div class="chk"><label><input type="checkbox" id="s-ssl" ${a.verify_ssl?'checked':''}> Verify SSL</label></div>
+  </fieldset>
+  <fieldset><legend>Email & SMTP</legend>
+    <div class="form-row"><div class="form-group"><label>Sender</label><input id="s-sender" value="${e.sender||''}"></div><div class="form-group"><label>Recipients (comma)</label><input id="s-rcpt" value="${(e.recipients||[]).join(', ')}"></div></div>
+    <div class="form-row"><div class="form-group"><label>SMTP Host</label><input id="s-smhost" value="${sm.host||''}"></div><div class="form-group"><label>Port</label><input id="s-smport" value="${sm.port||25}"></div></div>
+    <div class="form-row"><div class="form-group"><label>User</label><input id="s-smuser" value="${sm.user||''}"></div><div class="form-group"><label>Password</label><input id="s-smpass" type="password" value="${sm.password||''}"></div></div>
+    <div style="display:flex;gap:20px"><div class="chk"><label><input type="checkbox" id="s-tls" ${sm.enable_tls?'checked':''}> STARTTLS</label></div><div class="chk"><label><input type="checkbox" id="s-auth" ${sm.enable_auth?'checked':''}> Auth</label></div></div>
+  </fieldset>
+  <fieldset><legend>Alert Channels</legend>
+    <div style="display:flex;gap:20px;margin-bottom:12px"><div class="chk"><label><input type="checkbox" id="s-amail" ${active.includes('mail')?'checked':''}> 📧 Mail</label></div><div class="chk"><label><input type="checkbox" id="s-aline" ${active.includes('line')?'checked':''}> 📱 LINE</label></div><div class="chk"><label><input type="checkbox" id="s-awh" ${active.includes('webhook')?'checked':''}> 🔗 Webhook</label></div></div>
+    <div class="form-row"><div class="form-group"><label>LINE Token</label><input id="s-ltok" value="${al.line_channel_access_token||''}"></div><div class="form-group"><label>LINE Target ID</label><input id="s-ltgt" value="${al.line_target_id||''}"></div></div>
+    <div class="form-group"><label>Webhook URL</label><input id="s-whurl" value="${al.webhook_url||''}"></div>
+  </fieldset>
+  <fieldset><legend>Language</legend><div class="radio-group"><label><input type="radio" name="s-lang" value="en" ${st.language!=='zh_TW'?'checked':''}> English</label><label><input type="radio" name="s-lang" value="zh_TW" ${st.language==='zh_TW'?'checked':''}> 繁體中文</label></div></fieldset>`;
+}
+async function saveSettings(){
+  const active=[];if($('s-amail').checked)active.push('mail');if($('s-aline').checked)active.push('line');if($('s-awh').checked)active.push('webhook');
+  await post('/api/settings',{
+    api:{url:$('s-url').value,org_id:$('s-org').value,key:$('s-key').value,secret:$('s-sec').value,verify_ssl:$('s-ssl').checked},
+    email:{sender:$('s-sender').value,recipients:$('s-rcpt').value.split(',').map(s=>s.trim()).filter(Boolean)},
+    smtp:{host:$('s-smhost').value,port:parseInt($('s-smport').value)||25,user:$('s-smuser').value,password:$('s-smpass').value,enable_tls:$('s-tls').checked,enable_auth:$('s-auth').checked},
+    alerts:{active,line_channel_access_token:$('s-ltok').value,line_target_id:$('s-ltgt').value,webhook_url:$('s-whurl').value},
+    settings:{language:rv('s-lang')}
+  });
+  toast('Settings saved');
+}
+
+/* ─── Actions ─────────────────────────────────────────────────────── */
+async function runAction(name){
+  $('a-log').textContent='['+new Date().toLocaleTimeString()+'] Running '+name+'...';
+  const r=await post('/api/actions/'+name,{});
+  alog(r.output||'Done.');
+  if(name==='best-practices'){loadRules();loadDashboard()}
+  toast('✅ '+name+' completed');
+}
+async function runDebug(){
+  $('a-log').textContent='['+new Date().toLocaleTimeString()+'] Running debug mode...';
+  const r=await post('/api/actions/debug',{mins:$('a-debug-mins').value,pd_sel:$('a-debug-pd').value});
+  alog(r.output||'Done.');
+  toast('✅ Debug completed');
+}
+
+/* ─── Init ────────────────────────────────────────────────────────── */
+async function stopGui(){
+  if(!confirm('Stop the Web GUI server? The browser page will close.')) return;
+  try{ await post('/api/shutdown',{}); } catch(e){}
+  document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px"><h1 style="color:var(--accent2)">Web GUI Stopped</h1><p style="color:var(--dim)">You may close this tab. Restart from CLI or use --gui.</p></div>';
+}
+loadDashboard();
+</script>
+</body>
+</html>'''
