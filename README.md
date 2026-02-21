@@ -1,4 +1,4 @@
-# Illumio PCE Monitor (v1.0.0)
+# Illumio PCE Monitor
 
 ![Version](https://img.shields.io/badge/Version-v1.0.0-blue?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.8%2B-yellow?style=flat-square&logo=python&logoColor=white)
@@ -414,17 +414,17 @@ python illumio_monitor.py --monitor --interval 5   # 5 分鐘間隔（預設 10 
 === Illumio PCE Monitor ===
 API: https://pce.lab.local:8443 | Rules: 7
 ----------------------------------------
-1. 新增事件規則 (含 Health Check)
-2. 新增流量規則 (Traffic)
-3. 新增頻寬 / 傳輸量規則 (Bandwidth & Volume)
-4. 管理 / 刪除規則
-5. 系統設定 (API / Email / Line / Webhook)
-6. 載入官方最佳實踐預設配置
-7. 發送測試告警
-8. 立即執行一次監控 (Run Once)
-9. 流量規則模擬除錯模式
-10. 啟動 Web GUI
-0. 離開
+1. Add Event Rule (inc. PCE Health Check)
+2. Add Traffic Rule
+3. Add Bandwidth & Volume Rule
+4. Manage Rules (List/Delete)
+5. System Settings (API / Email / Alerts)
+6. Load Official Best Practices
+7. Send Test Alert
+8. Run Monitor Once
+9. Traffic Rule Debug Mode
+10. Launch Web GUI
+0. Exit
 ```
 
 ### 功能項目詳解

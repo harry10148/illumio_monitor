@@ -449,7 +449,7 @@ def alert_settings_menu(cm: ConfigManager):
 def settings_menu(cm: ConfigManager):
     while True:
         os.system('cls' if os.name == 'nt' else 'clear')
-        print(f"{Colors.HEADER}{t('menu_settings_title')} v{__version__}{Colors.ENDC}")
+        print(f"{Colors.HEADER}{t('menu_settings_title', version=__version__)}{Colors.ENDC}")
         masked_key = cm.config['api']['key'][:5] + "..." if cm.config['api']['key'] else t('not_set')
         print(f"API URL : {cm.config['api']['url']}")
         print(f"API Key : {masked_key}")

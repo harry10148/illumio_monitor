@@ -24,7 +24,7 @@ MESSAGES = {
         "bye": "Bye.",
         
         # Menu Titles
-        "main_menu_title": "=== Illumio PCE Monitor v{version} ===",
+        "main_menu_title": "=== Illumio PCE Monitor ===",
         "main_menu_api": "API: {url} | Rules: {count}",
         "main_menu_1": "1. Add Event Rule (inc. PCE Health Check)",
         "main_menu_2": "2. Add Traffic Rule",
@@ -90,7 +90,7 @@ MESSAGES = {
         "no_rules": "(No rules currently)",
         "input_delete_indices": "Enter to delete (e.g. 0, 2), modify (e.g. m 1), or -1 to return: ",
         
-        "menu_settings_title": "=== System Settings ===",
+        "menu_settings_title": "=== System Settings v{version} ===",
         "not_set": "Not Set",
         "settings_1": "1. Change API Settings (URL, Key, Secret)",
         "settings_2": "2. Change Alert Channels & Languages",
@@ -205,7 +205,7 @@ MESSAGES = {
         "bye": "再見。",
         
         # Menu Titles
-        "main_menu_title": "=== Illumio PCE Monitor v{version} ===",
+        "main_menu_title": "=== Illumio PCE Monitor ===",
         "main_menu_api": "API: {url} | 規則數: {count}",
         "main_menu_1": "1. 新增事件規則 (含 PCE Health Check)",
         "main_menu_2": "2. 新增流量規則 (Traffic Rule)",
@@ -271,7 +271,7 @@ MESSAGES = {
         "no_rules": "(目前沒有規則)",
         "input_delete_indices": "輸入編號刪除 (如 0, 2)、修改 (如 m 1) 或 -1 返回: ",
         
-        "menu_settings_title": "=== 系統設定 (System Settings) ===",
+        "menu_settings_title": "=== 系統設定 (System Settings) v{version} ===",
         "not_set": "未設定",
         "settings_1": "1. 修改 API 設定 (URL, Key, Secret)",
         "settings_2": "2. 告警通道與語言設定 (Alert Channels & Languages)",

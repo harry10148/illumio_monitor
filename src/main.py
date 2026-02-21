@@ -42,7 +42,7 @@ def run_daemon_loop(interval_minutes: int):
 
     cm = ConfigManager()
     logger.info(f"Starting daemon loop (interval={interval_minutes}m)")
-    print(f"Illumio PCE Monitor v{__version__} — daemon mode (interval={interval_minutes}m)")
+    print(f"Illumio PCE Monitor — daemon mode (interval={interval_minutes}m)")
     print("Press Ctrl+C or send SIGTERM to stop.")
 
     while not _shutdown_requested:
@@ -78,7 +78,7 @@ def main_menu():
     LOG_FILE = os.path.join(LOG_DIR, 'illumio_monitor.log')
 
     setup_logger('illumio_monitor', LOG_FILE)
-    logger.info(f"Starting Illumio PCE Monitor v{__version__}")
+    logger.info("Starting Illumio PCE Monitor")
 
     cm = ConfigManager()
 
@@ -157,7 +157,7 @@ def main_menu():
 
 def main():
     parser = argparse.ArgumentParser(
-        description=f"Illumio PCE Monitor v{__version__}",
+        description="Illumio PCE Monitor",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
