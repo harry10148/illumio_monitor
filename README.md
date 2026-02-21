@@ -72,32 +72,9 @@ API: https://pce.lab.local:8443 | Rules: 7
 | `m 3` | Modify rule at index 3 (opens editing wizard) |
 | `-1` | Return to main menu |
 
-<<<<<<< HEAD
 ## Web GUI
 
-=======
-## CLI Menu Guide
-
-| # | Function | # | Function |
-|:--|:---|:--|:---|
-| 1 | Add Event Rule (+ Health Check) | 6 | Load Best Practices |
-| 2 | Add Traffic Rule | 7 | Send Test Alert |
-| 3 | Add Bandwidth & Volume Rule | 8 | Run Once (full cycle) |
-| 4 | Manage Rules (List / Edit / Delete) | 9 | Debug Mode (sandbox) |
-| 5 | System Settings | 10 | Launch Web GUI |
-
-### CLI Manage Rules (Menu #4)
-
-| Input | Action |
-|:---|:---|
-| `d 0,2,5` | Delete rules at index 0, 2, 5 |
-| `m 3` | Modify rule at index 3 (opens editing wizard) |
-| `-1` | Return to main menu |
-
-## Web GUI
-
->>>>>>> 7f60beefa8454991f4e104025ad6c8b65bafe8ca
-The Web GUI is a Flask-based browser application (default `http://127.0.0.1:5000`). Flask is an **optional** dependency; CLI and daemon modes work without it.
+The Web GUI is a Flask-based browser application (default `http://127.0.0.1:5001`). Flask is an **optional** dependency; CLI and daemon modes work without it.
 
 ```bash
 pip install flask               # Install once
@@ -425,28 +402,9 @@ API: https://pce.lab.local:8443 | Rules: 7
 
 ## Web GUI
 
-<<<<<<< HEAD
-=======
-| # | 功能 | # | 功能 |
-|:--|:---|:--|:---|
-| 1 | 新增事件規則 (含 Health Check) | 6 | 載入最佳實踐 |
-| 2 | 新增流量規則 | 7 | 發送測試告警 |
-| 3 | 新增頻寬/傳輸量規則 | 8 | 立即執行監控 |
-| 4 | 管理規則 (列表 / 編輯 / 刪除) | 9 | 模擬除錯 (沙盒) |
-| 5 | 系統設定 | 10 | 啟動 Web GUI |
-
-### CLI 管理規則 (選單 #4)
-
-| 輸入 | 動作 |
-|:---|:---|
-| `d 0,2,5` | 刪除索引 0, 2, 5 的規則 |
-| `m 3` | 修改索引 3 的規則（進入編輯精靈） |
-| `-1` | 返回主選單 |
-
 ## Web GUI
 
->>>>>>> 7f60beefa8454991f4e104025ad6c8b65bafe8ca
-Web GUI 基於 Flask 的瀏覽器應用程式（預設 `http://127.0.0.1:5000`）。Flask 為**選用**套件，CLI 和 daemon 模式無需安裝。
+Web GUI 基於 Flask 的瀏覽器應用程式（預設 `http://127.0.0.1:5001`）。Flask 為**選用**套件，CLI 和 daemon 模式無需安裝。
 
 ```bash
 pip install flask               # 安裝一次
