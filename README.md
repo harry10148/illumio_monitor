@@ -157,6 +157,23 @@ Monitor data transfer rates (Mbps) or total transfer volume (MB).
 | `threshold_count` | Threshold value in Mbps or MB |
 | Same filter fields as Traffic Rules |
 
+## Under the Hood: Parameter Guide (API 25.2)
+
+The traffic filtering parameters (Filters / Excludes) in this tool map directly to the Illumio **Traffic Analysis REST API** specifications (refer to the official `/docs/REST_APIs_25_2.pdf` for exhaustive details):
+
+| UI Field | API Parameter | Supported Formats & Examples |
+|:---|:---|:---|
+| **Port** | `port` | Must be an integer (e.g., `80`, `443`, or `3306`) |
+| **Protocol** | `proto` | Converted to integer: `6` (TCP) or `17` (UDP) |
+| **Source / Destination (Label)** | `label.href` | **`key=value`**: Must exactly match PCE defined keys/values (e.g., `role=Web`, `env=Production`) |
+| **Source / Destination (IP)** | `ip_address` | **CIDR or Exact IP**: (e.g., `10.0.0.0/8`, `192.168.1.50`) |
+| **IP List** | `ip_list.href` | Processed identically to IP filters in the API payload. |
+
+**Policy Decisions Defined:**
+*   **Blocked**: Traffic explicitly dropped by active policy.
+*   **Potential**: Traffic currently allowed, but **would** be dropped if the workload transitioned to Enforced mode. (Highly useful for identifying rogue flows before enforcement).
+*   **Allowed**: Traffic explicitly permitted by policy.
+
 ## Alert Channels
 
 | Channel | Configuration |
@@ -425,7 +442,22 @@ API: https://pce.lab.local:8443 | Rules: 7
 *   **`9. 流量規則模擬除錯模式`**：沙盒環境。讓您用「目前的流量規則」去跑「過去的歷史流量」，藉此觀察該規則「是否會觸發告警」，但**不會真的發送通知**。對於調教門檻值非常有用。
 *  **`10. 啟動 Web GUI`**：在本地端啟動 Flask 網頁伺服器並開啟瀏覽器介面。
 
-## Web GUI
+## 深入解析: 監控參數與 API (Parameter Guide)
+
+本工具支援的流量過濾條件（Filters / Excludes）直接對應 Illumio **Traffic Analysis REST API** 規格 (可參閱官方文件 `/docs/REST_APIs_25_2.pdf`)：
+
+| 介面欄位 | API 參數 | 支援的輸入格式與範例 |
+|:---|:---|:---|
+| **Port** | `port` | 必須是整數 (例：`80`, `443` 或 `3306`) |
+| **Protocol** | `proto` | 單純設定為整數：`6` (TCP) 或 `17` (UDP) |
+| **Source / Destination (Label)** | `label.href` | **`key=value`**：必須完全吻合 PCE 的 Label (例：`role=Web`, `env=Production`) |
+| **Source / Destination (IP)** | `ip_address` | **CIDR 或 純 IP**：(例：`10.0.0.0/8`, `192.168.1.50`) |
+| **IP List** | `ip_list.href` | 輸入名稱即等同純 IP 的解析邏輯。 |
+
+**策略決定 (Policy Decisions) 的定義：**
+*   **Blocked**: 流量確實被目前的 Policy 阻擋。
+*   **Potential**: 流量目前被允許，但如果該 Workload 從 Build 進入 Enforced 模式，這些流量**將會**被阻擋。(這對於抓出預期外連線非常有幫助)
+*   **Allowed**: 流量完全符合 Policy 並被放行。
 
 ## Web GUI
 

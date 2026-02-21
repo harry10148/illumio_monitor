@@ -330,7 +330,18 @@ def manage_rules_menu(cm: ConfigManager):
             if r.get('ex_src_ip'): filters.append(f"{Colors.WARNING}[Excl SrcIP:{r['ex_src_ip']}]{Colors.ENDC}")
             if r.get('ex_dst_ip'): filters.append(f"{Colors.WARNING}[Excl DstIP:{r['ex_dst_ip']}]{Colors.ENDC}")
             filter_str = " ".join(filters)
-            print(f"{i:<4} {r['name'][:28]:<30} {rtype:<10} {cond:<20} {filter_str}")
+            
+            from src.utils import pad_string
+            # Truncate string gracefully if it's too long
+            display_name = r['name']
+            from src.utils import get_display_width
+            if get_display_width(display_name) > 28:
+                # Rough truncation for mixed width
+                display_name = display_name[:25] + "..."
+                
+            padded_name = pad_string(display_name, 30)
+            padded_type = pad_string(rtype, 10)
+            print(f"{i:<4} {padded_name} {padded_type} {cond:<20} {filter_str}")
         val = input(f"\n{t('input_delete_indices')}").strip().lower()
         if val == '-1': break
         

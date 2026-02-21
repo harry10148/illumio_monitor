@@ -205,10 +205,18 @@ def _create_app(cm: ConfigManager) -> 'Flask':
         dst = (d.get('dst') or '').strip()
         src_label, src_ip = (src, None) if src and '=' in src else (None, src or None)
         dst_label, dst_ip = (dst, None) if dst and '=' in dst else (None, dst or None)
+        ex_src = (d.get('ex_src') or '').strip()
+        ex_dst = (d.get('ex_dst') or '').strip()
+        ex_src_label, ex_src_ip = (ex_src, None) if ex_src and '=' in ex_src else (None, ex_src or None)
+        ex_dst_label, ex_dst_ip = (ex_dst, None) if ex_dst and '=' in ex_dst else (None, ex_dst or None)
         port = d.get('port')
         if port:
             try: port = int(port)
             except (ValueError, TypeError): port = None
+        ex_port = d.get('ex_port')
+        if ex_port:
+            try: ex_port = int(ex_port)
+            except (ValueError, TypeError): ex_port = None
 
         cm.add_or_update_rule({
             "id": int(datetime.datetime.now().timestamp()),
@@ -218,6 +226,9 @@ def _create_app(cm: ConfigManager) -> 'Flask':
             "port": port, "proto": None,
             "src_label": src_label, "dst_label": dst_label,
             "src_ip_in": src_ip, "dst_ip_in": dst_ip,
+            "ex_port": ex_port,
+            "ex_src_label": ex_src_label, "ex_dst_label": ex_dst_label,
+            "ex_src_ip": ex_src_ip, "ex_dst_ip": ex_dst_ip,
             "desc": d.get('name', ''), "rec": "Check Logs",
             "threshold_type": "count",
             "threshold_count": float(d.get('threshold_count', 100)),
@@ -537,6 +548,7 @@ legend { color:var(--accent2); font-weight:700; font-size:.9rem; padding:0 8px; 
   <div class="toolbar">
     <span style="font-size:1.1rem;font-weight:700;color:var(--accent2)">Rules</span>
     <span class="badge" id="r-badge">0</span>
+    <button class="btn btn-sm" style="margin-left:8px;background:var(--dim);color:#fff" onclick="openModal('m-help')">📖 Parameter Guide</button>
     <div class="spacer"></div>
     <button class="btn btn-warn btn-sm" onclick="openModal('m-event')">📋 + Event</button>
     <button class="btn btn-warn btn-sm" onclick="openModal('m-traffic')">🚦 + Traffic</button>
@@ -604,11 +616,11 @@ legend { color:var(--accent2); font-weight:700; font-size:.9rem; padding:0 8px; 
     <label><input type="radio" name="tr-pd" value="-1"> All</label>
   </div></fieldset>
   <fieldset><legend>Filters</legend>
-    <div class="form-row"><div class="form-group"><label>Port</label><input id="tr-port" placeholder="e.g. 443"></div><div class="form-group"><label>Protocol</label><select id="tr-proto"><option value="">Both</option><option value="6">TCP</option><option value="17">UDP</option></select></div></div>
-    <div class="form-row"><div class="form-group"><label>Source (Label/IP)</label><input id="tr-src" placeholder="e.g. role=Web or 10.0.0.1"></div><div class="form-group"><label>Destination (Label/IP)</label><input id="tr-dst"></div></div>
+    <div class="form-row"><div class="form-group"><label>Port</label><input id="tr-port" placeholder="e.g. 80, 443"></div><div class="form-group"><label>Protocol</label><select id="tr-proto"><option value="">Both</option><option value="6">TCP</option><option value="17">UDP</option></select></div></div>
+    <div class="form-row"><div class="form-group"><label>Source (Label/IP)</label><input id="tr-src" placeholder="e.g. role=Web, 10.0.0.0/8, 192.168.1.1"></div><div class="form-group"><label>Destination (Label/IP)</label><input id="tr-dst" placeholder="e.g. app=DB, 10.1.1.5"></div></div>
   </fieldset>
   <fieldset><legend>Excludes (Optional)</legend>
-    <div class="form-row-3"><div class="form-group"><label>Port</label><input id="tr-expt"></div><div class="form-group"><label>Source</label><input id="tr-exsrc"></div><div class="form-group"><label>Destination</label><input id="tr-exdst"></div></div>
+    <div class="form-row-3"><div class="form-group"><label>Exclude Port</label><input id="tr-expt" placeholder="e.g. 22"></div><div class="form-group"><label>Exclude Source</label><input id="tr-exsrc" placeholder="e.g. env=Kube, 10.9.9.9"></div><div class="form-group"><label>Exclude Destination</label><input id="tr-exdst" placeholder="e.g. 8.8.8.8"></div></div>
   </fieldset>
   <fieldset><legend>Threshold</legend>
     <div class="form-row-3"><div class="form-group"><label>Count</label><input id="tr-cnt" type="number" value="10"></div><div class="form-group"><label>Window (min)</label><input id="tr-win" type="number" value="10"></div><div class="form-group"><label>Cooldown (min)</label><input id="tr-cd" type="number" value="10"></div></div>
@@ -631,12 +643,37 @@ legend { color:var(--accent2); font-weight:700; font-size:.9rem; padding:0 8px; 
     <label><input type="radio" name="bw-pd" value="-1" checked> All</label>
   </div></fieldset>
   <fieldset><legend>Filters</legend>
-    <div class="form-row-3"><div class="form-group"><label>Port</label><input id="bw-port"></div><div class="form-group"><label>Source</label><input id="bw-src"></div><div class="form-group"><label>Destination</label><input id="bw-dst"></div></div>
+    <div class="form-row-3"><div class="form-group"><label>Port</label><input id="bw-port" placeholder="e.g. 443"></div><div class="form-group"><label>Source (Label/IP)</label><input id="bw-src" placeholder="e.g. role=Web, 10.0.0.0/8"></div><div class="form-group"><label>Destination (Label/IP)</label><input id="bw-dst" placeholder="e.g. app=DB, 10.1.1.5"></div></div>
+  </fieldset>
+  <fieldset><legend>Excludes (Optional)</legend>
+    <div class="form-row-3"><div class="form-group"><label>Exclude Port</label><input id="bw-expt" placeholder="e.g. 22"></div><div class="form-group"><label>Exclude Source</label><input id="bw-exsrc" placeholder="e.g. env=Kube, 10.9.9.9"></div><div class="form-group"><label>Exclude Destination</label><input id="bw-exdst" placeholder="e.g. 8.8.8.8"></div></div>
   </fieldset>
   <fieldset><legend>Threshold</legend>
     <div class="form-row-3"><div class="form-group"><label>Value</label><input id="bw-val" type="number" value="100"></div><div class="form-group"><label>Window (min)</label><input id="bw-win" type="number" value="10"></div><div class="form-group"><label>Cooldown (min)</label><input id="bw-cd" type="number" value="30"></div></div>
   </fieldset>
   <div class="modal-actions"><button class="btn btn-primary" onclick="closeModal('m-bw')">Cancel</button><button class="btn btn-success" onclick="saveBW()">💾 Save</button></div>
+</div></div>
+
+<!-- Help / Parameter Guide -->
+<div class="modal-bg" id="m-help"><div class="modal" style="max-width:600px;">
+  <h2>📖 Parameter Guide (API 25.2)</h2>
+  <div style="color:var(--dim);line-height:1.6;font-size:0.95rem;">
+    <p>Illumio PCE Monitor leverages the standard Illumio Traffic Analysis REST API parameters.</p>
+    <h3 style="color:#fff;margin-top:12px">Filters & Excludes</h3>
+    <ul style="padding-left:20px;margin-bottom:12px">
+      <li><strong>Label format:</strong> <code>key=value</code> (e.g., <code>role=Web</code>, <code>env=Production</code>, <code>app=Database</code>). Must exactly match the PCE label keys and values.</li>
+      <li><strong>IP List/CIDR format:</strong> Standard CIDR notation (e.g., <code>10.0.0.0/8</code>) or exact IPs (e.g., <code>192.168.1.50</code>).</li>
+      <li><strong>Port format:</strong> Integer port numbers (e.g., <code>80</code>, <code>443</code>, <code>3306</code>).</li>
+    </ul>
+
+    <h3 style="color:#fff;margin-top:12px">Policy Decisions</h3>
+    <ul style="padding-left:20px;margin-bottom:12px">
+      <li><strong>Blocked:</strong> Traffic explicitly dropped by policy.</li>
+      <li><strong>Potential:</strong> Traffic that <em>would</em> be blocked if the workload were placed into Enforced mode.</li>
+      <li><strong>Allowed:</strong> Traffic permitted by policy.</li>
+    </ul>
+  </div>
+  <div class="modal-actions"><button class="btn btn-primary" onclick="closeModal('m-help')">Close window</button></div>
 </div></div>
 
 <div class="toast" id="toast"></div>
@@ -729,44 +766,52 @@ function populateEvents(){
 
 /* ─── Edit Rule ───────────────────────────────────────────────────── */
 async function editRule(idx,type){
-  const r=await api('/api/rules/'+idx);
-  if(r.error){toast('Rule not found','err');return}
-  if(type==='event'){
-    await loadCatalog();
-    // Find and select category
-    for(const[cat,evts] of Object.entries(_catalog)){
-      if(r.filter_value in evts){$('ev-cat').value=cat;populateEvents();$('ev-type').value=r.filter_value;break}
+  try {
+    const r=await api('/api/rules/'+idx);
+    if(!r || r.error){toast('Rule not found','err');return}
+    if(type==='event'){
+      await loadCatalog();
+      // Find and select category
+      for(const[cat,evts] of Object.entries(_catalog)){
+        if(r.filter_value in evts){$('ev-cat').value=cat;populateEvents();$('ev-type').value=r.filter_value;break}
+      }
+      setRv('ev-tt',r.threshold_type||'immediate');
+      $('ev-cnt').value=r.threshold_count||5;
+      $('ev-win').value=r.threshold_window||10;
+      $('ev-cd').value=r.cooldown_minutes||10;
+      openModal('m-event',idx);
+    } else if(type==='traffic'){
+      $('tr-name').value=r.name||'';
+      setRv('tr-pd',String(r.pd??2));
+      $('tr-port').value=r.port||'';
+      $('tr-proto').value=r.proto?String(r.proto):'';
+      $('tr-src').value=r.src_label||r.src_ip_in||'';
+      $('tr-dst').value=r.dst_label||r.dst_ip_in||'';
+      $('tr-expt').value=r.ex_port||'';
+      $('tr-exsrc').value=r.ex_src_label||r.ex_src_ip||'';
+      $('tr-exdst').value=r.ex_dst_label||r.ex_dst_ip||'';
+      $('tr-cnt').value=r.threshold_count||10;
+      $('tr-win').value=r.threshold_window||10;
+      $('tr-cd').value=r.cooldown_minutes||10;
+      openModal('m-traffic',idx);
+    } else {
+      $('bw-name').value=r.name||'';
+      setRv('bw-mt',r.type||'bandwidth');
+      setRv('bw-pd',String(r.pd??-1));
+      $('bw-port').value=r.port||'';
+      $('bw-src').value=r.src_label||r.src_ip_in||'';
+      $('bw-dst').value=r.dst_label||r.dst_ip_in||'';
+      $('bw-expt').value=r.ex_port||'';
+      $('bw-exsrc').value=r.ex_src_label||r.ex_src_ip||'';
+      $('bw-exdst').value=r.ex_dst_label||r.ex_dst_ip||'';
+      $('bw-val').value=r.threshold_count||100;
+      $('bw-win').value=r.threshold_window||10;
+      $('bw-cd').value=r.cooldown_minutes||30;
+      openModal('m-bw',idx);
     }
-    setRv('ev-tt',r.threshold_type||'immediate');
-    $('ev-cnt').value=r.threshold_count||5;
-    $('ev-win').value=r.threshold_window||10;
-    $('ev-cd').value=r.cooldown_minutes||10;
-    openModal('m-event',idx);
-  } else if(type==='traffic'){
-    $('tr-name').value=r.name||'';
-    setRv('tr-pd',String(r.pd??2));
-    $('tr-port').value=r.port||'';
-    $('tr-proto').value=r.proto?String(r.proto):'';
-    $('tr-src').value=r.src_label||r.src_ip_in||'';
-    $('tr-dst').value=r.dst_label||r.dst_ip_in||'';
-    $('tr-expt').value=r.ex_port||'';
-    $('tr-exsrc').value=r.ex_src_label||r.ex_src_ip||'';
-    $('tr-exdst').value=r.ex_dst_label||r.ex_dst_ip||'';
-    $('tr-cnt').value=r.threshold_count||10;
-    $('tr-win').value=r.threshold_window||10;
-    $('tr-cd').value=r.cooldown_minutes||10;
-    openModal('m-traffic',idx);
-  } else {
-    $('bw-name').value=r.name||'';
-    setRv('bw-mt',r.type||'bandwidth');
-    setRv('bw-pd',String(r.pd??-1));
-    $('bw-port').value=r.port||'';
-    $('bw-src').value=r.src_label||r.src_ip_in||'';
-    $('bw-dst').value=r.dst_label||r.dst_ip_in||'';
-    $('bw-val').value=r.threshold_count||100;
-    $('bw-win').value=r.threshold_window||10;
-    $('bw-cd').value=r.cooldown_minutes||30;
-    openModal('m-bw',idx);
+  } catch(e) {
+    console.error(e);
+    alert('UI Error: ' + e.message);
   }
 }
 
@@ -786,7 +831,12 @@ async function saveTraffic(){
 }
 async function saveBW(){
   const name=$('bw-name').value.trim();if(!name){toast('Name required','err');return}
-  const data={name,rule_type:rv('bw-mt'),pd:rv('bw-pd'),port:$('bw-port').value,src:$('bw-src').value,dst:$('bw-dst').value,threshold_count:$('bw-val').value,threshold_window:$('bw-win').value,cooldown_minutes:$('bw-cd').value};
+  const data={
+    name,rule_type:rv('bw-mt'),pd:rv('bw-pd'),
+    port:$('bw-port').value,src:$('bw-src').value,dst:$('bw-dst').value,
+    ex_port:$('bw-expt').value,ex_src:$('bw-exsrc').value,ex_dst:$('bw-exdst').value,
+    threshold_count:$('bw-val').value,threshold_window:$('bw-win').value,cooldown_minutes:$('bw-cd').value
+  };
   if(_editIdx!==null) await put('/api/rules/'+_editIdx,{...data,type:data.rule_type}); else await post('/api/rules/bandwidth',data);
   closeModal('m-bw');toast('Rule saved');loadRules();loadDashboard();
 }

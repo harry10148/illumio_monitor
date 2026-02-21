@@ -114,13 +114,13 @@ def main_menu():
         elif sel == 5:
             settings_menu(cm)
         elif sel == 6:
-            print(f"\n{Colors.WARNING}{t('warning_best_practice')}{Colors.ENDC}")
-            confirm = safe_input(t('confirm_best_practice'), str)
-            if confirm == 'YES':
+            print(f"\n{Colors.WARNING}{t('warning_best_practices')}{Colors.ENDC}")
+            confirm = safe_input(f"{t('confirm_continue')} (Y/N)", str)
+            if confirm and confirm.strip().upper() == 'Y':
                 cm.load_best_practices()
-                input(t('best_practice_loaded'))
+                input(t('best_practice_loaded', default='\nBest practices loaded successfully! Press Enter to continue...'))
             else:
-                input(t('operation_cancelled'))
+                input(t('operation_cancelled', default='\nOperation cancelled. Press Enter to continue...'))
         elif sel == 7:
             Reporter(cm).send_alerts(force_test=True)
             input(t('done_msg'))

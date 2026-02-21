@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+import unicodedata
 from logging.handlers import RotatingFileHandler
 from src.i18n import t
 
@@ -72,3 +73,22 @@ def format_unit(value, type='volume') -> str:
             return f"{val / 1000:.2f} Gbps"
         return f"{val:.2f} Mbps"
     return str(val)
+
+
+def get_display_width(s: str) -> int:
+    """Calculate the display width of a string (CJK characters count as 2)."""
+    width = 0
+    for char in s:
+        status = unicodedata.east_asian_width(char)
+        width += 2 if status in ('W', 'F') else 1
+    return width
+
+
+def pad_string(s: str, total_width: int, fillchar: str = ' ') -> str:
+    """Pad string to a specific display width considering CJK characters."""
+    current_width = get_display_width(s)
+    if current_width >= total_width:
+        # Note: Truncation is tricky with mixed widths, returning mostly as-is 
+        # but you should truncate before passing to this function if strictly needed.
+        return s
+    return s + fillchar * (total_width - current_width)
