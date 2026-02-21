@@ -43,9 +43,9 @@ The monitoring engine separates **Event** and **Traffic** queries completely, ut
   - *Priority*: Interval/Delta calculation (precise traffic within the window).
   - *Fallback*: Total/Lifetime volume (for long-lived connections that haven't closed yet).
 
-## CLI Menu Guide
+## CLI User Guide (Interactive Menu)
 
-The default interactive CLI mode presents the following text menu:
+The default interactive CLI mode presents the following text menu. Each option provides a self-guided wizard:
 
 ```text
 === Illumio PCE Monitor ===
@@ -64,13 +64,20 @@ API: https://pce.lab.local:8443 | Rules: 7
 0. Exit
 ```
 
-### CLI Manage Rules (Menu #4)
+### Option Details
 
-| Input | Action |
-|:---|:---|
-| `d 0,2,5` | Delete rules at index 0, 2, 5 |
-| `m 3` | Modify rule at index 3 (opens editing wizard) |
-| `-1` | Return to main menu |
+*   **`1. Add Event Rule`**: Create alerts based on PCE audit events (e.g., `agent.tampering`, `user.login_failed`). Includes the option to enable the **PCE Health Check** monitor.
+*   **`2. Add Traffic Rule`**: Create flow-based rules. You will be prompted to filter by Policy Decision (Blocked, Allowed, etc.), Port, Protocol, and optionally PCE Labels or IP Lists.
+*   **`3. Add Bandwidth & Volume Rule`**: Monitor extreme data transfers. Choose between **Bandwidth** (peak rate in Mbps) or **Total Volume** (cumulative MB transferred within a window).
+*   **`4. Manage Rules`**: Lists all active rules. 
+    *   To **delete**, input indices separated by commas: `d 0,2,5`
+    *   To **modify/edit**, input `m <index>`: `m 3` (This will launch an inplace editing wizard).
+*   **`5. System Settings`**: Configure your PCE API credentials, setup SMTP for Email alerts, toggle secondary channels (LINE, Webhook), configure SSL behavior, and change the console language.
+*   **`6. Load Official Best Practices`**: Quickly bootstrap the tool. This will **overwrite** your current rules and load recommended templates (e.g. Agent Offline, High Blocked Traffic).
+*   **`7. Send Test Alert`**: Sends a dummy notification to all currently active alert channels to verify connectivity.
+*   **`8. Run Monitor Once`**: Forces an immediate full monitoring cycle (evaluating all rules) in the console instead of waiting for the background timer.
+*   **`9. Traffic Rule Debug Mode`**: A sandbox environment. Evaluates your current traffic rules against historical PCE data offline to see what *would* have triggered an alert, without actually sending one. Very useful for tuning thresholds.
+*   **`10. Launch Web GUI`**: Starts the local web server and opens the browser interface for visual management.
 
 ## Web GUI
 
@@ -213,6 +220,13 @@ python illumio_monitor.py --gui       # Web GUI (opens browser)
 
 ### Windows Service (NSSM)
 
+**Deployment Principle**: The Windows deployment uses a PowerShell script (`deploy/install_service.ps1`) to wrap the Python script using **NSSM (Non-Sucking Service Manager)**. It configures the Python executable to run with `--monitor` in headless mode. 
+
+**Features enabled by NSSM**:
+*   **Auto-Start**: Service is registered with `SERVICE_AUTO_START` to boot with Windows.
+*   **Log Management**: Standard Output/Error are intercepted and piped into `logs/service_stdout.log` and `service_stderr.log` with an automatic 10MB file rotation.
+*   **Crash Recovery**: If the Python process terminates unexpectedly, NSSM will automatically revive it after a 10-second delay.
+
 Download [NSSM](https://nssm.cc/download), then run PowerShell **as Administrator**:
 
 ```powershell
@@ -232,9 +246,15 @@ cd deploy
 .\install_service.ps1 -Action uninstall
 ```
 
-**Features**: Auto-start (`SERVICE_AUTO_START`), crash recovery (restart after 10s), log rotation (10MB).
-
 ### Linux Service (systemd)
+
+**Deployment Principle**: The Linux deployment relies on the native `systemd` init process using the provided `deploy/illumio-monitor.service` unit file. 
+
+**Security & Operational Features**:
+*   **Least Privilege**: Runs as a dedicated restricted system user (`illumio_monitor`) with `NoNewPrivileges=true` and `ProtectSystem=strict`.
+*   **Auto-Start**: Tied to `multi-user.target` for boot launch.
+*   **Crash Recovery**: Configured with `Restart=always` and a `RestartSec=10` delay.
+*   **Logging**: Standard output naturally flows into `journald` for native Linux log management.
 
 ```bash
 sudo cp -r . /opt/illumio_monitor/
@@ -249,8 +269,6 @@ sudo systemctl enable --now illumio-monitor
 sudo systemctl status illumio-monitor    # Check status
 sudo journalctl -u illumio-monitor -f    # Live logs
 ```
-
-**Features**: Auto-start (`multi-user.target`), crash recovery (`Restart=always`, 10s delay), security hardening (`NoNewPrivileges`, `ProtectSystem=strict`).
 
 ## File Structure
 
@@ -371,34 +389,41 @@ python illumio_monitor.py --monitor --interval 5   # 5 分鐘間隔（預設 10 
   - *優先採用*: 區間流量 (精確計算該視窗內的傳輸量)
   - *備援機制*: 生命週期總量 (針對尚未關閉的超長連線)
 
-## 文字介面功能選單 (CLI Menu)
+## 文字介面使用指南 (CLI User Guide)
 
-預設的文字互動模式提供以下主選單功能：
+當啟動為預設文字互動模式時，若系統語言選擇繁體中文，會呈現以下選單（具備互動式引導）：
 
 ```text
 === Illumio PCE Monitor ===
 API: https://pce.lab.local:8443 | Rules: 7
 ----------------------------------------
-1. Add Event Rule (inc. PCE Health Check)
-2. Add Traffic Rule
-3. Add Bandwidth & Volume Rule
-4. Manage Rules (List/Delete)
-5. System Settings (API / Email / Alerts)
-6. Load Official Best Practices
-7. Send Test Alert
-8. Run Monitor Once
-9. Traffic Rule Debug Mode
-10. Launch Web GUI
-0. Exit
+1. 新增事件規則 (含 Health Check)
+2. 新增流量規則 (Traffic)
+3. 新增頻寬 / 傳輸量規則 (Bandwidth & Volume)
+4. 管理 / 刪除規則
+5. 系統設定 (API / Email / Line / Webhook)
+6. 載入官方最佳實踐預設配置
+7. 發送測試告警
+8. 立即執行一次監控 (Run Once)
+9. 流量規則模擬除錯模式
+10. 啟動 Web GUI
+0. 離開
 ```
 
-### CLI 管理規則 (選單 #4)
+### 功能項目詳解
 
-| 輸入 | 動作 |
-|:---|:---|
-| `d 0,2,5` | 刪除索引 0, 2, 5 的規則 |
-| `m 3` | 修改索引 3 的規則（進入編輯精靈） |
-| `-1` | 返回主選單 |
+*   **`1. 新增事件規則`**：針對 PCE 安全稽核事件進行告警設定（例如 `agent.tampering` Agent 遭竄改、密碼錯誤等）。也可在此啟用 **PCE 節點健康度檢查 (Health Check)**。
+*   **`2. 新增流量規則`**：基於網路連線（Flows）進行監控。引導精靈會請您選擇策略結果（例如：阻擋、允許）、指定 Port、通訊協定，以及進階的 Label 或 IP List 過濾。
+*   **`3. 新增頻寬 / 傳輸量規則`**：監控異常的大型資料傳輸。可選擇 **頻寬 (Bandwidth)**（Mbps 即時峰值）或 **總傳輸量 (Total Volume)**（一段時間內的 MB 累積量，適合抓取資料外洩）。
+*   **`4. 管理 / 刪除規則`**：列出目前生效的所有監控規則。
+    *   **刪除規則**：輸入索引值的逗號分隔即可批次刪除（例：`d 0,2,5`）
+    *   **修改規則**：輸入 `m <索引>` 即可進入編輯模式（例：`m 3`）
+*   **`5. 系統設定`**：設定您的 PCE API 連線憑證、SMTP 寄信伺服器、開啟/關閉其他告警通道（LINE, Webhook）、設定憑證驗證（SSL Verify），以及切換中英文介面。
+*   **`6. 載入官方最佳實踐預設配置`**：一鍵初始化。這會 **清空並覆寫** 您目前的設定，並載入官方推薦的監控版型（例如 Agent 離線告警、高頻率阻擋流量告警等）。
+*   **`7. 發送測試告警`**：對所有啟用的告警通道（Email, LINE, Webhook 等）發送一則測試訊息，方便您驗證網路和設定是否正確。
+*   **`8. 立即執行一次監控`**：強制程式立刻對所有規則執行一次 API 檢查與計算，不需等待背景計時器。
+*   **`9. 流量規則模擬除錯模式`**：沙盒環境。讓您用「目前的流量規則」去跑「過去的歷史流量」，藉此觀察該規則「是否會觸發告警」，但**不會真的發送通知**。對於調教門檻值非常有用。
+*  **`10. 啟動 Web GUI`**：在本地端啟動 Flask 網頁伺服器並開啟瀏覽器介面。
 
 ## Web GUI
 
@@ -494,6 +519,13 @@ python illumio_monitor.py --gui       # Web GUI（開啟瀏覽器）
 
 ### Windows 服務 (NSSM)
 
+**部署原理**：Windows 部署採用 PowerShell 腳本 (`deploy/install_service.ps1`)，結合第三方工具 **NSSM (Non-Sucking Service Manager)** 將 Python 腳本封裝為原生系統服務。此腳本將強制 Python 以無介面（Headless）及 `--monitor` 背景模式執行。
+
+**NSSM 帶來的效益**：
+*   **開機自啟**：服務被註冊為自動啟動 (`SERVICE_AUTO_START`)，確保開機後常駐監控。
+*   **日誌管理**：標準輸出與錯誤 (Stdout/Stderr) 會被 NSSM 攔截，導入 `logs/service_stdout.log` 中，並具備自動日誌輪替功能（滿 10MB 自動切割）。
+*   **崩潰復原**：若 Python 程序發生異常崩潰，NSSM 會在 10 秒後自動將其重新啟動。
+
 下載 [NSSM](https://nssm.cc/download)，以**管理員權限**執行 PowerShell：
 
 ```powershell
@@ -513,9 +545,14 @@ cd deploy
 .\install_service.ps1 -Action uninstall
 ```
 
-**特性**：自動啟動、崩潰後 10 秒自動重啟、日誌 10MB 自動輪替。
-
 ### Linux 服務 (systemd)
+
+**部署原理**：Linux 部署直接依賴原生的系統管理工具 `systemd`，透過隨附的 `deploy/illumio-monitor.service` 配置檔將程式註冊為 Daemon 守護進程。
+
+**安全性與運作特性**：
+*   **最小權限原則**：服務指定以新建的受限系統帳號 (`illumio_monitor`) 執行，禁止登入且不具備 sudo 權限。並啟用 `NoNewPrivileges=true` 與 `ProtectSystem=strict` 防止系統檔案遭竄改。
+*   **開機啟動與復原**：隨 `multi-user.target` 開機啟動，並設定 `Restart=always` 搭配 10 秒延遲，確保服務中斷後自我修復。
+*   **原生整合日誌**：捨棄傳統文字檔寫入，其輸出的 Log 自動無縫對接 Linux 的 `journald` 日誌系統。
 
 ```bash
 sudo cp -r . /opt/illumio_monitor/
@@ -530,8 +567,6 @@ sudo systemctl enable --now illumio-monitor
 sudo systemctl status illumio-monitor    # 查看狀態
 sudo journalctl -u illumio-monitor -f    # 即時日誌
 ```
-
-**特性**：開機自動啟動、崩潰自動重啟 (`Restart=always`)、安全強化 (`NoNewPrivileges`)。
 
 ## 檔案結構
 
