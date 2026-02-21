@@ -138,17 +138,19 @@ def main_menu():
             ana.run_debug_mode()
             input(t('debug_done'))
         elif sel == 10:
-            # Launch tkinter GUI from console menu
-            from src.gui import launch_gui, HAS_TK
-            if not HAS_TK:
-                import platform
-                print(f"{Colors.FAIL}GUI not available: tkinter is not installed.{Colors.ENDC}")
-                if platform.system() == 'Linux':
-                    print(f"  Ubuntu/Debian: sudo apt install python3-tk")
-                    print(f"  RHEL/Rocky:    sudo dnf install python3-tkinter")
+            # Launch Web GUI from console menu
+            from src.gui import launch_gui, HAS_FLASK
+            if not HAS_FLASK:
+                print(f"{Colors.FAIL}Web GUI not available: Flask is not installed.{Colors.ENDC}")
+                print(f"  Install it with: pip install flask")
                 input(t('press_enter_to_continue'))
             else:
-                launch_gui(cm)
+                port_str = safe_input("Web GUI Port (default 5001): ", str)
+                try:
+                    port = int(port_str) if port_str and port_str.strip() else 5001
+                except (ValueError, TypeError):
+                    port = 5001
+                launch_gui(cm, port=port)
 
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────
@@ -159,10 +161,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  python illumio_monitor.py                  # Interactive CLI menu\n"
-            "  python illumio_monitor.py --monitor        # Headless daemon mode\n"
-            "  python illumio_monitor.py --monitor -i 5   # Daemon with 5-min interval\n"
-            "  python illumio_monitor.py --gui            # Launch tkinter GUI\n"
+            "  python illumio_monitor.py                       # Interactive CLI menu\n"
+            "  python illumio_monitor.py --monitor             # Headless daemon mode\n"
+            "  python illumio_monitor.py --monitor -i 5        # Daemon with 5-min interval\n"
+            "  python illumio_monitor.py --gui                 # Launch Web GUI (port 5001)\n"
+            "  python illumio_monitor.py --gui --port 8080     # Web GUI on custom port\n"
         )
     )
     parser.add_argument('--monitor', action='store_true',
@@ -170,7 +173,9 @@ def main():
     parser.add_argument('-i', '--interval', type=int, default=10,
                         help='Monitoring interval in minutes (default: 10)')
     parser.add_argument('--gui', action='store_true',
-                        help='Launch the tkinter GUI')
+                        help='Launch the Web GUI (requires: pip install flask)')
+    parser.add_argument('-p', '--port', type=int, default=5001,
+                        help='Web GUI port (default: 5001)')
 
     args = parser.parse_args()
 
@@ -184,13 +189,13 @@ def main():
     if args.monitor:
         run_daemon_loop(args.interval)
     elif args.gui:
-        try:
-            from src.gui import launch_gui
-            cm = ConfigManager()
-            launch_gui(cm)
-        except ImportError as e:
-            print(f"GUI module not available: {e}")
+        from src.gui import launch_gui, HAS_FLASK
+        if not HAS_FLASK:
+            print("Web GUI requires Flask. Install it with:")
+            print("  pip install flask")
             sys.exit(1)
+        cm = ConfigManager()
+        launch_gui(cm, port=args.port)
     else:
         try:
             main_menu()

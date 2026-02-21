@@ -10,14 +10,14 @@
 
 # English
 
-An advanced **agentless** monitoring tool for **Illumio Core (PCE)** via REST API. Features intelligent traffic analysis, security event detection, and automated alerting — with **zero external dependencies** (Python stdlib only).
+An advanced **agentless** monitoring tool for **Illumio Core (PCE)** via REST API. Features intelligent traffic analysis, security event detection, and automated alerting — with **zero external dependencies** (Python stdlib only for CLI/daemon).
 
 ## Three Execution Modes
 
 | Mode | Command | Description |
 |:---|:---|:---|
 | **Interactive CLI** | `python illumio_monitor.py` | Default, menu-driven |
-| **Desktop GUI** | `python illumio_monitor.py --gui` | Tkinter GUI (also from CLI menu #10) |
+| **Web GUI** | `python illumio_monitor.py --gui` | Browser-based GUI (requires Flask) |
 | **Daemon Service** | `python illumio_monitor.py --monitor` | Headless background monitoring |
 
 ```bash
@@ -35,29 +35,162 @@ python illumio_monitor.py --monitor --interval 5   # 5-minute interval (default:
 | **Cooldown** | Per-rule independent cooldown prevents alert flooding |
 | **Retry Logic** | Exponential backoff for HTTP 429 (rate limit) and 5xx errors, up to 3 retries |
 
-## Menu Guide
+## CLI Menu Guide
 
 | # | Function | # | Function |
 |:--|:---|:--|:---|
 | 1 | Add Event Rule (+ Health Check) | 6 | Load Best Practices |
 | 2 | Add Traffic Rule | 7 | Send Test Alert |
 | 3 | Add Bandwidth & Volume Rule | 8 | Run Once (full cycle) |
-| 4 | Manage Rules | 9 | Debug Mode (sandbox) |
-| 5 | System Settings | 10 | Launch GUI |
+| 4 | Manage Rules (List / Edit / Delete) | 9 | Debug Mode (sandbox) |
+| 5 | System Settings | 10 | Launch Web GUI |
+
+### CLI Manage Rules (Menu #4)
+
+| Input | Action |
+|:---|:---|
+| `d 0,2,5` | Delete rules at index 0, 2, 5 |
+| `m 3` | Modify rule at index 3 (opens editing wizard) |
+| `-1` | Return to main menu |
+
+## Web GUI
+
+The Web GUI is a Flask-based browser application (default `http://127.0.0.1:5000`). Flask is an **optional** dependency; CLI and daemon modes work without it.
+
+```bash
+pip install flask               # Install once
+python illumio_monitor.py --gui  # Opens browser automatically
+```
+
+The GUI is also accessible from CLI **Menu #10**.
+
+### Web GUI Tabs
+
+| Tab | Features |
+|:---|:---|
+| **Dashboard** | API status, active rules count, health check status, language. Test Connection & Refresh buttons. |
+| **Rules** | Full CRUD: **Add** (Event / Traffic / BW-Volume), **Edit** (✏️ per row, pre-fills modal), **Delete** (checkbox + batch delete) |
+| **Settings** | API connection, email/SMTP, alert channels (Mail/LINE/Webhook), language switch |
+| **Actions** | Run Monitor Once, Debug Mode (configurable window & policy decision), Send Test Alert, Load Best Practices (double confirmation) |
+
+### Web GUI REST API Endpoints
+
+For developers who want to extend the Web GUI or build automation:
+
+| Method | Endpoint | Description |
+|:---|:---|:---|
+| `GET` | `/` | Serve the SPA HTML page |
+| `GET` | `/api/status` | Dashboard data (version, API URL, rule count) |
+| `GET` | `/api/event-catalog` | Full event type catalog (grouped by category) |
+| `GET` | `/api/rules` | List all rules with index |
+| `GET` | `/api/rules/<index>` | Get single rule by index |
+| `POST` | `/api/rules/event` | Add new event rule |
+| `POST` | `/api/rules/traffic` | Add new traffic rule |
+| `POST` | `/api/rules/bandwidth` | Add new bandwidth/volume rule |
+| `PUT` | `/api/rules/<index>` | Update existing rule by index |
+| `DELETE` | `/api/rules/<index>` | Delete rule by index |
+| `GET` | `/api/settings` | Get all settings (API, email, SMTP, alerts) |
+| `POST` | `/api/settings` | Save settings (partial update supported) |
+| `POST` | `/api/actions/run` | Run full monitoring cycle |
+| `POST` | `/api/actions/debug` | Run debug mode (body: `{mins, pd_sel}`) |
+| `POST` | `/api/actions/test-alert` | Send test alert |
+| `POST` | `/api/actions/best-practices` | Load best practice rules |
+| `POST` | `/api/actions/test-connection` | Test PCE API connectivity |
+| `POST` | `/api/shutdown` | Graceful server shutdown |
+
+## Rule Types
+
+### Event Rules
+Monitor PCE audit events (agent tampering, login failures, API auth errors, etc.).
+
+| Field | Description |
+|:---|:---|
+| `filter_value` | PCE event type (e.g. `agent.tampering`, `user.login_failed`) |
+| `threshold_type` | `immediate` (alert on first occurrence) or `count` (cumulative within window) |
+| `threshold_count` | Number of occurrences to trigger (for `count` type) |
+| `threshold_window` | Time window in minutes |
+| `cooldown_minutes` | Minimum minutes between repeated alerts |
+
+### Traffic Rules
+Monitor traffic flow counts by policy decision and filters.
+
+| Field | Description |
+|:---|:---|
+| `pd` | Policy decision: `2`=Blocked, `1`=Potentially Blocked, `0`=Allowed, `-1`=All |
+| `port` / `proto` | Filter by port number and protocol (`6`=TCP, `17`=UDP) |
+| `src_label` / `dst_label` | Filter by PCE label (e.g. `role=Web`) |
+| `src_ip_in` / `dst_ip_in` | Filter by IP or IP List name |
+| `ex_*` fields | Exclude filters (same format as above) |
+
+### Bandwidth / Volume Rules
+Monitor data transfer rates (Mbps) or total transfer volume (MB).
+
+| Field | Description |
+|:---|:---|
+| `type` | `bandwidth` (peak Mbps) or `volume` (total MB) |
+| `threshold_count` | Threshold value in Mbps or MB |
+| Same filter fields as Traffic Rules |
+
+## Alert Channels
+
+| Channel | Configuration |
+|:---|:---|
+| **Email** | SMTP host/port, authentication (optional), STARTTLS support |
+| **LINE** | Channel access token + target ID (via LINE Messaging API) |
+| **Webhook** | Any HTTP URL (POST with JSON payload) |
+
+Configure active channels in `config.json` → `alerts.active` array: `["mail", "line", "webhook"]`
 
 ## Installation & Deployment
 
 ### Requirements
-- Python 3.8+ (no `pip install` needed)
-- Linux GUI support (if using `--gui`):
-  - Ubuntu/Debian: `sudo apt install python3-tk`
-  - RHEL/Rocky: `sudo dnf install python3-tkinter`
+- Python 3.8+ (no `pip install` needed for CLI and daemon)
+- Web GUI mode (`--gui`): `pip install flask`
 
 ### Quick Start
 ```bash
-python illumio_monitor.py          # Interactive CLI
-python illumio_monitor.py --gui    # Desktop GUI
+git clone <repo-url>
+cd illumio_monitor
+cp config.json.example config.json    # Edit with your PCE credentials
+python illumio_monitor.py             # Interactive CLI
+python illumio_monitor.py --gui       # Web GUI (opens browser)
 ```
+
+### Configuration (`config.json`)
+
+```jsonc
+{
+  "api": {
+    "url": "https://pce.example.com:8443",   // PCE URL
+    "org_id": "1",                           // Organization ID
+    "key": "api_xxxxxxxx",                   // API Key ID
+    "secret": "xxxxxxxx",                    // API Secret
+    "verify_ssl": true                       // SSL certificate verification
+  },
+  "email": {
+    "sender": "monitor@example.com",
+    "recipients": ["admin@example.com"]
+  },
+  "smtp": {
+    "host": "smtp.example.com", "port": 587,
+    "user": "user", "password": "pass",
+    "enable_auth": true, "enable_tls": true
+  },
+  "alerts": {
+    "active": ["mail"],                      // Active channels
+    "line_channel_access_token": "",
+    "line_target_id": "",
+    "webhook_url": ""
+  },
+  "settings": {
+    "enable_health_check": true,
+    "language": "en"                         // "en" or "zh_TW"
+  },
+  "rules": []                                // Rules added via CLI or GUI
+}
+```
+
+> **Security**: `config.json` and `state.json` are excluded from Git via `.gitignore`.
 
 ### Windows Service (NSSM)
 
@@ -105,46 +238,95 @@ sudo journalctl -u illumio-monitor -f    # Live logs
 ```
 illumio_monitor/
 ├── illumio_monitor.py        # Entry point
-├── config.json               # Configuration (API, SMTP, Rules)
-├── config.json.example       # Template
-├── state.json                # Runtime state (auto-generated)
+├── config.json               # Configuration (API, SMTP, Rules) — gitignored
+├── config.json.example       # Config template (safe for version control)
+├── state.json                # Runtime state (auto-generated) — gitignored
+├── requirements.txt          # Optional: flask for Web GUI
 ├── src/
-│   ├── main.py               # CLI + argparse + Daemon loop
-│   ├── api_client.py         # REST API client (urllib)
-│   ├── analyzer.py           # Analysis engine
-│   ├── reporter.py           # Email / LINE / Webhook alerting
-│   ├── config.py             # Config management
-│   ├── settings.py           # CLI settings menu
-│   ├── gui.py                # Tkinter GUI
-│   ├── i18n.py               # i18n (en / zh_TW)
-│   └── utils.py              # Utilities
+│   ├── __init__.py           # Package init + version
+│   ├── main.py               # CLI menu + argparse + daemon loop
+│   ├── api_client.py         # REST API client (stdlib urllib)
+│   ├── analyzer.py           # Analysis engine (event/traffic/bandwidth)
+│   ├── reporter.py           # Alert dispatcher (Email / LINE / Webhook)
+│   ├── config.py             # ConfigManager (load / save / CRUD rules)
+│   ├── settings.py           # CLI settings menus (add rules, manage rules)
+│   ├── gui.py                # Flask Web GUI (SPA + REST API endpoints)
+│   ├── i18n.py               # Internationalization (en / zh_TW)
+│   └── utils.py              # Utilities (logger, colors, formatting)
 ├── deploy/
 │   ├── install_service.ps1   # Windows service (NSSM + PowerShell)
 │   └── illumio-monitor.service  # Linux systemd unit
 ├── tests/                    # Unit tests
-└── logs/                     # Logs (auto-generated)
+└── logs/                     # Log files (auto-generated)
+```
+
+## Developer Guide
+
+### Architecture Overview
+
+```
+illumio_monitor.py ──→ src/main.py
+                        ├── CLI menu mode (interactive)
+                        ├── --gui → src/gui.py (Flask Web GUI)
+                        └── --monitor → daemon loop
+                              ├── ApiClient (src/api_client.py)  → PCE REST API
+                              ├── Analyzer  (src/analyzer.py)    → Rule evaluation
+                              └── Reporter  (src/reporter.py)    → Send alerts
+```
+
+### Key Classes
+
+| Class | File | Responsibility |
+|:---|:---|:---|
+| `ConfigManager` | `config.py` | Load/save JSON config, add/update/delete rules, load best practices |
+| `ApiClient` | `api_client.py` | HTTP requests to PCE (urllib), retry logic, SSL handling |
+| `Analyzer` | `analyzer.py` | Event/traffic/bandwidth analysis, sliding window, debug mode |
+| `Reporter` | `reporter.py` | Dispatch alerts via configured channels |
+
+### Adding a New Alert Channel
+
+1. Add channel key to `config.json` → `alerts.active` array
+2. Add credentials to `config.json`
+3. Implement `_send_<channel>()` method in `src/reporter.py`
+4. Update `src/gui.py` Settings tab to expose the new fields
+
+### Adding a New Rule Type
+
+1. Define rule schema in `src/config.py` → `add_or_update_rule()`
+2. Add analysis logic in `src/analyzer.py` → `run_analysis()`
+3. Add CLI wizard in `src/settings.py`
+4. Add Web GUI modal form and API endpoint in `src/gui.py`
+
+### Running Tests
+
+```bash
+python -m unittest discover -s tests -v
 ```
 
 ## FAQ
 
-**Q: Any packages to install?** — No. Pure Python stdlib.
+**Q: Any packages to install?** — No for CLI/daemon. Web GUI needs `pip install flask`.
 
 **Q: Change monitoring interval?** — `--monitor --interval 5` or `nssm edit IllumioMonitor` for Windows service.
 
 **Q: Debug results differ from alerts?** — Different time baselines (current time vs scheduled time).
 
+**Q: How to exclude specific subnets?** — Use the exclude filter fields in traffic rules (IP List names from PCE).
+
+**Q: Web GUI port already in use?** — Edit `launch_gui()` in `src/gui.py` to change the default port from 5000.
+
 ---
 
 # 繁體中文
 
-專為 **Illumio Core (PCE)** 設計的進階**無 Agent** 監控工具。透過 REST API 實現智慧型流量分析、安全事件偵測與自動化告警。**完全使用 Python 標準函式庫**，無需外部套件。
+專為 **Illumio Core (PCE)** 設計的進階**無 Agent** 監控工具。透過 REST API 實現智慧型流量分析、安全事件偵測與自動化告警。**完全使用 Python 標準函式庫**（CLI/daemon 無需外部套件）。
 
 ## 三種執行模式
 
 | 模式 | 指令 | 說明 |
 |:---|:---|:---|
 | **互動式 CLI** | `python illumio_monitor.py` | 預設模式，選單操作 |
-| **桌面 GUI** | `python illumio_monitor.py --gui` | Tkinter 圖形介面（亦可從選單 #10 啟動） |
+| **Web GUI** | `python illumio_monitor.py --gui` | 瀏覽器介面（需 Flask） |
 | **背景服務** | `python illumio_monitor.py --monitor` | 無人值守 Daemon 模式 |
 
 ```bash
@@ -169,21 +351,105 @@ python illumio_monitor.py --monitor --interval 5   # 5 分鐘間隔（預設 10 
 | 1 | 新增事件規則 (含 Health Check) | 6 | 載入最佳實踐 |
 | 2 | 新增流量規則 | 7 | 發送測試告警 |
 | 3 | 新增頻寬/傳輸量規則 | 8 | 立即執行監控 |
-| 4 | 管理規則 | 9 | 模擬除錯 (沙盒) |
-| 5 | 系統設定 | 10 | 啟動 GUI |
+| 4 | 管理規則 (列表 / 編輯 / 刪除) | 9 | 模擬除錯 (沙盒) |
+| 5 | 系統設定 | 10 | 啟動 Web GUI |
+
+### CLI 管理規則 (選單 #4)
+
+| 輸入 | 動作 |
+|:---|:---|
+| `d 0,2,5` | 刪除索引 0, 2, 5 的規則 |
+| `m 3` | 修改索引 3 的規則（進入編輯精靈） |
+| `-1` | 返回主選單 |
+
+## Web GUI
+
+Web GUI 基於 Flask 的瀏覽器應用程式（預設 `http://127.0.0.1:5000`）。Flask 為**選用**套件，CLI 和 daemon 模式無需安裝。
+
+```bash
+pip install flask               # 安裝一次
+python illumio_monitor.py --gui  # 自動開啟瀏覽器
+```
+
+也可從 CLI **選單 #10** 啟動。
+
+### Web GUI 功能頁籤
+
+| 頁籤 | 功能 |
+|:---|:---|
+| **Dashboard** | API 狀態、規則數量、健康檢查、語言。測試連線與重新整理。 |
+| **Rules** | 完整 CRUD：**新增** (Event / Traffic / BW-Volume)、**編輯** (✏️ 按鈕，自動帶入現有值)、**刪除** (勾選批次刪除) |
+| **Settings** | API 連線、Email/SMTP、告警通道 (Mail/LINE/Webhook)、語言切換 |
+| **Actions** | 執行監控、除錯模式、發送測試告警、載入最佳實踐 (雙重確認) |
+
+### Web GUI REST API 端點
+
+供開發者擴充 Web GUI 或自動化使用：
+
+| 方法 | 端點 | 說明 |
+|:---|:---|:---|
+| `GET` | `/api/status` | Dashboard 資料 |
+| `GET` | `/api/rules` | 列出所有規則 |
+| `GET` | `/api/rules/<index>` | 取得單一規則 |
+| `POST` | `/api/rules/event` | 新增事件規則 |
+| `POST` | `/api/rules/traffic` | 新增流量規則 |
+| `POST` | `/api/rules/bandwidth` | 新增頻寬/傳輸量規則 |
+| `PUT` | `/api/rules/<index>` | 更新現有規則 |
+| `DELETE` | `/api/rules/<index>` | 刪除規則 |
+| `GET/POST` | `/api/settings` | 取得/儲存設定 |
+| `POST` | `/api/actions/run` | 執行完整監控週期 |
+| `POST` | `/api/actions/debug` | 除錯模式 |
+| `POST` | `/api/actions/test-alert` | 發送測試告警 |
+| `POST` | `/api/actions/best-practices` | 載入最佳實踐規則 |
+| `POST` | `/api/actions/test-connection` | 測試 PCE 連線 |
+
+## 規則類型
+
+### 事件規則
+監控 PCE 稽核事件（Agent 竄改、登入失敗、API 認證錯誤等）。
+
+| 欄位 | 說明 |
+|:---|:---|
+| `filter_value` | PCE 事件類型 (如 `agent.tampering`) |
+| `threshold_type` | `immediate` (立即) 或 `count` (累計) |
+| `threshold_count` | 觸發所需次數 |
+| `threshold_window` | 時間視窗 (分鐘) |
+| `cooldown_minutes` | 冷卻時間 (分鐘) |
+
+### 流量規則
+依策略決定和篩選條件監控流量筆數。
+
+| 欄位 | 說明 |
+|:---|:---|
+| `pd` | 策略決定：`2`=阻擋, `1`=潛在阻擋, `0`=允許, `-1`=全部 |
+| `port` / `proto` | 埠號 / 協定 (`6`=TCP, `17`=UDP) |
+| `src_label` / `dst_label` | PCE Label 篩選 (如 `role=Web`) |
+| `ex_*` 欄位 | 排除條件 |
+
+### 頻寬 / 傳輸量規則
+監控資料傳輸速率 (Mbps) 或總傳輸量 (MB)。
+
+## 告警通道
+
+| 通道 | 設定 |
+|:---|:---|
+| **Email** | SMTP 主機/埠、認證 (選用)、STARTTLS |
+| **LINE** | Channel access token + target ID |
+| **Webhook** | 任意 HTTP URL (POST JSON) |
 
 ## 安裝與部署
 
 ### 系統需求
-- Python 3.8+（無需 `pip install` 任何套件）
-- Linux GUI 支援（若使用 `--gui`）：
-  - Ubuntu/Debian: `sudo apt install python3-tk`
-  - RHEL/Rocky: `sudo dnf install python3-tkinter`
+- Python 3.8+（CLI 和 daemon 無需安裝任何套件）
+- Web GUI 模式 (`--gui`): `pip install flask`
 
 ### 快速開始
 ```bash
-python illumio_monitor.py          # 互動式 CLI
-python illumio_monitor.py --gui    # 桌面 GUI
+git clone <repo-url>
+cd illumio_monitor
+cp config.json.example config.json    # 編輯填入 PCE 連線資訊
+python illumio_monitor.py             # 互動式 CLI
+python illumio_monitor.py --gui       # Web GUI（開啟瀏覽器）
 ```
 
 ### Windows 服務 (NSSM)
@@ -232,19 +498,21 @@ sudo journalctl -u illumio-monitor -f    # 即時日誌
 ```
 illumio_monitor/
 ├── illumio_monitor.py        # 主程式進入點
-├── config.json               # 設定檔 (API, SMTP, Rules)
-├── config.json.example       # 設定檔範本
-├── state.json                # 運行時狀態 (自動產生)
+├── config.json               # 設定檔 (API, SMTP, Rules) — 已排除 Git
+├── config.json.example       # 設定檔範本 (可安全提交)
+├── state.json                # 運行時狀態 (自動產生) — 已排除 Git
+├── requirements.txt          # 選用：flask (Web GUI)
 ├── src/
-│   ├── main.py               # CLI + argparse + Daemon 迴圈
-│   ├── api_client.py         # REST API 客戶端 (urllib)
-│   ├── analyzer.py           # 分析引擎
-│   ├── reporter.py           # Email / LINE / Webhook 告警
-│   ├── config.py             # 設定檔管理
-│   ├── settings.py           # CLI 設定選單
-│   ├── gui.py                # Tkinter 桌面 GUI
+│   ├── __init__.py           # 套件初始化 + 版本號
+│   ├── main.py               # CLI 選單 + argparse + daemon 迴圈
+│   ├── api_client.py         # REST API 客戶端 (stdlib urllib)
+│   ├── analyzer.py           # 分析引擎 (事件/流量/頻寬)
+│   ├── reporter.py           # 告警發送 (Email / LINE / Webhook)
+│   ├── config.py             # ConfigManager (載入/儲存/規則 CRUD)
+│   ├── settings.py           # CLI 設定選單 (新增/管理規則)
+│   ├── gui.py                # Flask Web GUI (SPA + REST API 端點)
 │   ├── i18n.py               # 多語系 (en / zh_TW)
-│   └── utils.py              # 工具函式
+│   └── utils.py              # 工具函式 (logger, colors, formatting)
 ├── deploy/
 │   ├── install_service.ps1   # Windows 服務 (NSSM + PowerShell)
 │   └── illumio-monitor.service  # Linux systemd 單元
@@ -252,12 +520,57 @@ illumio_monitor/
 └── logs/                     # 日誌 (自動產生)
 ```
 
+## 開發者指南
+
+### 架構概覽
+
+```
+illumio_monitor.py ──→ src/main.py
+                        ├── CLI 選單模式 (互動式)
+                        ├── --gui → src/gui.py (Flask Web GUI)
+                        └── --monitor → daemon 迴圈
+                              ├── ApiClient  → PCE REST API
+                              ├── Analyzer   → 規則評估
+                              └── Reporter   → 發送告警
+```
+
+### 關鍵類別
+
+| 類別 | 檔案 | 職責 |
+|:---|:---|:---|
+| `ConfigManager` | `config.py` | 載入/儲存 JSON 設定、新增/更新/刪除規則、載入最佳實踐 |
+| `ApiClient` | `api_client.py` | HTTP 請求 (urllib)、重試邏輯、SSL 處理 |
+| `Analyzer` | `analyzer.py` | 事件/流量/頻寬分析、滑動視窗、除錯模式 |
+| `Reporter` | `reporter.py` | 透過設定的通道派送告警 |
+
+### 新增告警通道
+
+1. 在 `config.json` → `alerts.active` 陣列新增通道名稱
+2. 在 `config.json` 新增對應的憑證欄位
+3. 在 `src/reporter.py` 實作 `_send_<channel>()` 方法
+4. 在 `src/gui.py` Settings 頁籤新增設定項目
+
+### 新增規則類型
+
+1. 在 `src/config.py` → `add_or_update_rule()` 定義規則結構
+2. 在 `src/analyzer.py` → `run_analysis()` 新增分析邏輯
+3. 在 `src/settings.py` 新增 CLI 互動精靈
+4. 在 `src/gui.py` 新增 Web GUI 表單和 API 端點
+
+### 執行測試
+
+```bash
+python -m unittest discover -s tests -v
+```
+
 ## 常見問題
 
-**Q: 需要安裝套件嗎？** — 不需要，完全使用 Python 標準函式庫。
+**Q: 需要安裝套件嗎？** — CLI/daemon 不需要。Web GUI 需 `pip install flask`。
 
 **Q: 如何更改監控間隔？** — `--monitor --interval 5` 或 Windows 服務用 `nssm edit IllumioMonitor`。
 
 **Q: Debug 結果跟告警不同？** — 基準時間不同（當下時間 vs 排程觸發時間）。
 
 **Q: 如何排除特定網段？** — 在規則的排除條件欄位輸入 PCE 上的 IP List 名稱。
+
+**Q: Web GUI 埠號被佔用？** — 編輯 `src/gui.py` 中 `launch_gui()` 的 port 參數（預設 5000）。
