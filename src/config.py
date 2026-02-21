@@ -23,7 +23,7 @@ _DEFAULT_CONFIG = {
     },
     "email": {"sender": "monitor@localhost", "recipients": ["admin@example.com"]},
     "smtp": {"host": "localhost", "port": 25, "user": "", "password": "", "enable_auth": False, "enable_tls": False},
-    "settings": {"enable_health_check": True, "language": "en"},
+    "settings": {"enable_health_check": True, "language": "en", "theme": "light"},
     "rules": []
 }
 
@@ -94,12 +94,12 @@ class ConfigManager:
 
     def remove_rules_by_index(self, index_list):
         sorted_indices = sorted(index_list, reverse=True)
-        count = 0
+        count: int = 0
         for idx in sorted_indices:
             if 0 <= idx < len(self.config["rules"]):
                 removed = self.config["rules"].pop(idx)
                 print(t('rule_deleted', name=removed['name']))
-                count += 1
+                count = count + 1
         if count > 0:
             self.save()
 

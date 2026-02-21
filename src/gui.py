@@ -109,6 +109,13 @@ def _create_app(cm: ConfigManager) -> 'Flask':
         return _SPA_HTML
 
     # ─── API: Status ──────────────────────────────────────────────────────
+    @app.route('/api/ui_translations')
+    def api_ui_translations():
+        lang = cm.config.get("settings", {}).get("language", "en")
+        from src.i18n import MESSAGES
+        ui_dict = {k: v for k, v in MESSAGES.get(lang, MESSAGES["en"]).items() if k.startswith("gui_")}
+        return jsonify(ui_dict)
+
     @app.route('/api/status')
     def api_status():
         cm.load()
@@ -117,7 +124,8 @@ def _create_app(cm: ConfigManager) -> 'Flask':
             "api_url": cm.config['api']['url'],
             "rules_count": len(cm.config['rules']),
             "health_check": cm.config['settings'].get('enable_health_check', True),
-            "language": cm.config.get('settings', {}).get('language', 'en')
+            "language": cm.config.get('settings', {}).get('language', 'en'),
+            "theme": cm.config.get('settings', {}).get('theme', 'dark')
         })
 
     # ─── API: Event Catalog ───────────────────────────────────────────────
@@ -283,11 +291,11 @@ def _create_app(cm: ConfigManager) -> 'Flask':
     def api_get_settings():
         cm.load()
         return jsonify({
-            "api": cm.config['api'],
-            "email": cm.config['email'],
-            "smtp": cm.config.get('smtp', {}),
-            "alerts": cm.config.get('alerts', {}),
-            "settings": cm.config.get('settings', {})
+            "api": cm.config.get("api", {}),
+            "email": cm.config.get("email", {}),
+            "smtp": cm.config.get("smtp", {}),
+            "alerts": cm.config.get("alerts", {}),
+            "settings": cm.config.get("settings", {})
         })
 
     @app.route('/api/settings', methods=['POST'])
@@ -361,7 +369,9 @@ def _create_app(cm: ConfigManager) -> 'Flask':
             from src.api_client import ApiClient
             api = ApiClient(cm)
             status, body = api.check_health()
-            return jsonify({"ok": status == 200, "status": status, "body": _strip_ansi(str(body)[:500])})
+            body_text = str(body)
+            clean_body = _strip_ansi(body_text)
+            return jsonify({"ok": status == 200, "status": status, "body": clean_body[:500]})
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)})
 
@@ -413,11 +423,18 @@ _SPA_HTML = r'''<!DOCTYPE html>
 <title>Illumio PCE Monitor</title>
 <style>
 :root {
-  --bg: #0f0f1a; --bg2: #1a1a2e; --bg3: #252540;
-  --fg: #e0e0f0; --dim: #6c7086; --accent: #7c3aed;
-  --accent2: #a78bfa; --success: #34d399; --warn: #fbbf24;
-  --danger: #f87171; --border: #2d2d44;
+  --bg: #1a2c32; --bg2: #24393f; --bg3: #2d454c;
+  --fg: #F5F5F5; --dim: #989A9B; --accent: #FF5500;
+  --accent2: #FFA22F; --success: #299b65; --warn: #FFB74A;
+  --danger: #f43f51; --border: #325158;
   --radius: 10px; --shadow: 0 4px 24px rgba(0,0,0,.4);
+}
+[data-theme="light"] {
+  --bg: #F5F5F5; --bg2: #FFFFFF; --bg3: #EAEBEB;
+  --fg: #313638; --dim: #6F7274; --accent: #FF5500;
+  --accent2: #F97607; --success: #166644; --warn: #FFA22F;
+  --danger: #be122f; --border: #D6D7D7;
+  --shadow: 0 2px 10px rgba(0,0,0,.05);
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--fg); min-height:100vh; }
@@ -450,13 +467,13 @@ a { color:var(--accent2); }
 /* Buttons */
 .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 18px; border:none; border-radius:8px; font-size:.88rem; font-weight:600; cursor:pointer; transition:.15s; }
 .btn-primary { background:var(--accent); color:#fff; }
-.btn-primary:hover { background:var(--accent2); }
-.btn-success { background:#059669; color:#fff; }
-.btn-success:hover { background:var(--success); color:#000; }
-.btn-danger { background:#dc2626; color:#fff; }
+.btn-primary:hover { background:var(--accent2); color:#1a2c32; }
+.btn-success { background:#166644; color:#fff; }
+.btn-success:hover { background:var(--success); color:#fff; }
+.btn-danger { background:#be122f; color:#fff; }
 .btn-danger:hover { background:var(--danger); }
 .btn-warn { background:#d97706; color:#fff; }
-.btn-warn:hover { background:var(--warn); color:#000; }
+.btn-warn:hover { background:var(--warn); color:#1a2c32; }
 .btn-sm { padding:6px 12px; font-size:.8rem; }
 .btn:disabled { opacity:.5; cursor:not-allowed; }
 
@@ -517,28 +534,28 @@ legend { color:var(--accent2); font-weight:700; font-size:.9rem; padding:0 8px; 
 <body>
 
 <div class="header">
-  <h1>◆ Illumio PCE Monitor</h1>
-  <div style="display:flex;align-items:center;gap:14px"><span class="meta" id="hdr-meta">Loading...</span><button class="btn btn-danger btn-sm" onclick="stopGui()" title="Stop Web GUI">⏹ Stop</button></div>
+  <h1 data-i18n="gui_title">◆ Illumio PCE Monitor</h1>
+  <div style="display:flex;align-items:center;gap:14px"><span class="meta" id="hdr-meta">Loading...</span><button class="btn btn-danger btn-sm" onclick="stopGui()" title="Stop Web GUI" data-i18n="gui_stop">⏹ Stop</button></div>
 </div>
 
 <div class="tabs">
-  <div class="tab active" onclick="switchTab('dashboard')">Dashboard</div>
-  <div class="tab" onclick="switchTab('rules')">Rules</div>
-  <div class="tab" onclick="switchTab('settings')">Settings</div>
-  <div class="tab" onclick="switchTab('actions')">Actions</div>
+  <div class="tab active" onclick="switchTab('dashboard')" data-i18n="gui_tab_dashboard">Dashboard</div>
+  <div class="tab" onclick="switchTab('rules')" data-i18n="gui_tab_rules">Rules</div>
+  <div class="tab" onclick="switchTab('settings')" data-i18n="gui_tab_settings">Settings</div>
+  <div class="tab" onclick="switchTab('actions')" data-i18n="gui_tab_actions">Actions</div>
 </div>
 
 <!-- ═══ Dashboard ═══ -->
 <div class="panel active" id="p-dashboard">
   <div class="cards">
-    <div class="card"><div class="label">API Status</div><div class="value" id="d-api">—</div></div>
-    <div class="card"><div class="label">Active Rules</div><div class="value" id="d-rules">—</div></div>
-    <div class="card"><div class="label">Health Check</div><div class="value" id="d-health">—</div></div>
-    <div class="card"><div class="label">Language</div><div class="value" id="d-lang">—</div></div>
+    <div class="card"><div class="label" data-i18n="gui_api_status">API Status</div><div class="value" id="d-api">—</div></div>
+    <div class="card"><div class="label" data-i18n="gui_active_rules">Active Rules</div><div class="value" id="d-rules">—</div></div>
+    <div class="card"><div class="label" data-i18n="gui_health_check">Health Check</div><div class="value" id="d-health">—</div></div>
+    <div class="card"><div class="label" data-i18n="gui_language">Language</div><div class="value" id="d-lang">—</div></div>
   </div>
   <div style="display:flex;gap:8px;margin-bottom:14px;">
-    <button class="btn btn-primary" onclick="testConn()">🔗 Test Connection</button>
-    <button class="btn btn-primary" onclick="loadDashboard()">🔄 Refresh</button>
+    <button class="btn btn-primary" onclick="testConn()" data-i18n="gui_test_conn">🔗 Test Connection</button>
+    <button class="btn btn-primary" onclick="loadDashboard()" data-i18n="gui_refresh">🔄 Refresh</button>
   </div>
   <div class="log-box" id="d-log">[Ready]</div>
 </div>
@@ -546,17 +563,17 @@ legend { color:var(--accent2); font-weight:700; font-size:.9rem; padding:0 8px; 
 <!-- ═══ Rules ═══ -->
 <div class="panel" id="p-rules">
   <div class="toolbar">
-    <span style="font-size:1.1rem;font-weight:700;color:var(--accent2)">Rules</span>
+    <span style="font-size:1.1rem;font-weight:700;color:var(--accent2)" data-i18n="gui_tab_rules">Rules</span>
     <span class="badge" id="r-badge">0</span>
-    <button class="btn btn-sm" style="margin-left:8px;background:var(--dim);color:#fff" onclick="openModal('m-help')">📖 Parameter Guide</button>
+    <button class="btn btn-sm" style="margin-left:8px;background:var(--dim);color:#fff" onclick="openModal('m-help')" data-i18n="gui_param_guide">📖 Parameter Guide</button>
     <div class="spacer"></div>
-    <button class="btn btn-warn btn-sm" onclick="openModal('m-event')">📋 + Event</button>
-    <button class="btn btn-warn btn-sm" onclick="openModal('m-traffic')">🚦 + Traffic</button>
-    <button class="btn btn-warn btn-sm" onclick="openModal('m-bw')">📊 + BW/Vol</button>
-    <button class="btn btn-danger btn-sm" onclick="deleteSelected()">🗑 Delete</button>
+    <button class="btn btn-warn btn-sm" onclick="openModal('m-event')" data-i18n="gui_add_event">📋 + Event</button>
+    <button class="btn btn-warn btn-sm" onclick="openModal('m-traffic')" data-i18n="gui_add_traffic">🚦 + Traffic</button>
+    <button class="btn btn-warn btn-sm" onclick="openModal('m-bw')" data-i18n="gui_add_bw">📊 + BW/Vol</button>
+    <button class="btn btn-danger btn-sm" onclick="deleteSelected()" data-i18n="gui_delete">🗑 Delete</button>
   </div>
   <table class="rule-table">
-    <thead><tr><th style="width:30px"><input type="checkbox" id="r-chkall" onchange="toggleAll(this)"></th><th>Type</th><th>Name</th><th>Condition</th><th>Filters</th><th style="width:50px">Edit</th></tr></thead>
+    <thead><tr><th style="width:30px"><input type="checkbox" id="r-chkall" onchange="toggleAll(this)"></th><th data-i18n="gui_col_type">Type</th><th data-i18n="gui_col_name">Name</th><th data-i18n="gui_col_condition">Condition</th><th data-i18n="gui_col_filters">Filters</th><th style="width:50px" data-i18n="gui_col_edit">Edit</th></tr></thead>
     <tbody id="r-body"></tbody>
   </table>
 </div>
@@ -565,93 +582,92 @@ legend { color:var(--accent2); font-weight:700; font-size:.9rem; padding:0 8px; 
 <div class="panel" id="p-settings">
   <div id="s-form"></div>
   <div style="text-align:right;margin-top:16px;">
-    <button class="btn btn-success" onclick="saveSettings()">💾 Save All Settings</button>
+    <button class="btn btn-success" onclick="saveSettings()" data-i18n="gui_save_all">💾 Save All Settings</button>
   </div>
 </div>
 
 <!-- ═══ Actions ═══ -->
 <div class="panel" id="p-actions">
   <div class="action-grid">
-    <div class="action-card"><h3>▶ Run Monitor Once</h3><p>Execute full cycle: Health → Fetch → Analyze → Alert</p><button class="btn btn-primary" onclick="runAction('run')">Run</button></div>
-    <div class="action-card"><h3>🔍 Debug Mode</h3><p>Sandbox mode — no alerts, no state updates</p>
+    <div class="action-card"><h3 data-i18n="gui_run_once">▶ Run Monitor Once</h3><p data-i18n="gui_run_once_desc">Execute full cycle: Health → Fetch → Analyze → Alert</p><button class="btn btn-primary" onclick="runAction('run')" data-i18n="gui_run_btn">Run</button></div>
+    <div class="action-card"><h3 data-i18n="gui_debug_mode">🔍 Debug Mode</h3><p data-i18n="gui_debug_desc">Sandbox mode — no alerts, no state updates</p>
       <div class="form-row" style="margin-bottom:8px;">
-        <div class="form-group"><label>Window (min)</label><input id="a-debug-mins" value="30"></div>
-        <div class="form-group"><label>Policy Dec.</label><select id="a-debug-pd"><option value="1">Blocked</option><option value="2">Allowed</option><option value="3" selected>All</option></select></div>
+        <div class="form-group"><label data-i18n="gui_window_min">Window (min)</label><input id="a-debug-mins" value="30"></div>
+        <div class="form-group"><label data-i18n="gui_policy_dec">Policy Dec.</label><select id="a-debug-pd"><option value="1" data-i18n="gui_pd_blocked">Blocked</option><option value="2" data-i18n="gui_pd_allowed">Allowed</option><option value="3" data-i18n="gui_pd_all" selected>All</option></select></div>
       </div>
-      <button class="btn btn-primary" onclick="runDebug()">Run Debug</button>
+      <button class="btn btn-primary" onclick="runDebug()" data-i18n="gui_run_debug">Run Debug</button>
     </div>
-    <div class="action-card"><h3>📧 Send Test Alert</h3><p>Verify Email / LINE / Webhook delivery</p><button class="btn btn-primary" onclick="runAction('test-alert')">Send</button></div>
-    <div class="action-card"><h3>📋 Load Best Practices</h3><p>Replace ALL existing rules with recommended defaults</p><button class="btn btn-danger" onclick="confirmBestPractices()">Load</button></div>
+    <div class="action-card"><h3 data-i18n="gui_test_alert">📧 Send Test Alert</h3><p data-i18n="gui_test_alert_desc">Verify Email / LINE / Webhook delivery</p><button class="btn btn-primary" onclick="runAction('test-alert')" data-i18n="gui_send">Send</button></div>
+    <div class="action-card"><h3 data-i18n="gui_best_practices">📋 Load Best Practices</h3><p data-i18n="gui_best_practices_desc">Replace ALL existing rules with recommended defaults</p><button class="btn btn-danger" onclick="confirmBestPractices()" data-i18n="gui_load">Load</button></div>
   </div>
-  <h3 style="color:var(--accent2);margin-bottom:8px;">Output</h3>
+  <h3 style="color:var(--accent2);margin-bottom:8px;" data-i18n="gui_output">Output</h3>
   <div class="log-box" id="a-log"></div>
 </div>
 
 <!-- ═══ Modals ═══ -->
 <!-- Event -->
 <div class="modal-bg" id="m-event"><div class="modal">
-  <h2>Add Event Rule</h2>
-  <div class="form-group"><label>Category</label><select id="ev-cat" onchange="populateEvents()"><option value="">Select...</option></select></div>
-  <div class="form-group"><label>Event Type</label><select id="ev-type"><option value="">Select category first</option></select></div>
-  <fieldset><legend>Threshold</legend>
-    <div class="form-group"><label>Type</label><div class="radio-group"><label><input type="radio" name="ev-tt" value="immediate" checked> Immediate</label><label><input type="radio" name="ev-tt" value="count"> Cumulative</label></div></div>
+  <h2><span data-i18n="gui_add_event_rule" id="me-title">Add Event Rule</span></h2>
+  <div class="form-group"><label data-i18n="gui_category">Category</label><select id="ev-cat" onchange="populateEvents()"><option value="" data-i18n="gui_select">Select...</option></select></div>
+  <div class="form-group"><label data-i18n="gui_event_type">Event Type</label><select id="ev-type"><option value="" data-i18n="gui_select_first">Select category first</option></select></div>
+  <fieldset><legend data-i18n="gui_threshold">Threshold</legend>
+    <div class="form-group"><label data-i18n="gui_type">Type</label><div class="radio-group"><label><input type="radio" name="ev-tt" value="immediate" checked> <span data-i18n="gui_tt_immediate">Immediate</span></label><label><input type="radio" name="ev-tt" value="count"> <span data-i18n="gui_tt_count">Cumulative</span></label></div></div>
     <div class="form-row-3">
-      <div class="form-group"><label>Count</label><input id="ev-cnt" type="number" value="5"></div>
-      <div class="form-group"><label>Window (min)</label><input id="ev-win" type="number" value="10"></div>
-      <div class="form-group"><label>Cooldown (min)</label><input id="ev-cd" type="number" value="10"></div>
+      <div class="form-group"><label data-i18n="gui_count">Count</label><input id="ev-cnt" type="number" value="5"></div>
+      <div class="form-group"><label data-i18n="gui_window_min">Window (min)</label><input id="ev-win" type="number" value="10"></div>
+      <div class="form-group"><label data-i18n="gui_cooldown">Cooldown (min)</label><input id="ev-cd" type="number" value="10"></div>
     </div>
   </fieldset>
-  <div class="chk"><label><input type="checkbox" id="ev-hc" checked> Enable PCE Health Check</label></div>
-  <div class="modal-actions"><button class="btn btn-primary" onclick="closeModal('m-event')">Cancel</button><button class="btn btn-success" onclick="saveEvent()">💾 Save</button></div>
+  <div class="modal-actions"><button class="btn btn-primary" onclick="closeModal('m-event')" data-i18n="gui_cancel">Cancel</button><button class="btn btn-success" onclick="saveEvent()" data-i18n="gui_save">💾 Save</button></div>
 </div></div>
 
 <!-- Traffic -->
 <div class="modal-bg" id="m-traffic"><div class="modal">
-  <h2>Add Traffic Rule</h2>
-  <div class="form-group"><label>Rule Name</label><input id="tr-name"></div>
-  <fieldset><legend>Policy Decision</legend><div class="radio-group">
-    <label><input type="radio" name="tr-pd" value="2" checked> Blocked</label>
-    <label><input type="radio" name="tr-pd" value="1"> Potential</label>
-    <label><input type="radio" name="tr-pd" value="0"> Allowed</label>
-    <label><input type="radio" name="tr-pd" value="-1"> All</label>
+  <h2><span data-i18n="gui_add_traffic_rule" id="mt-title">Add Traffic Rule</span></h2>
+  <div class="form-group"><label data-i18n="gui_rule_name">Rule Name</label><input id="tr-name"></div>
+  <fieldset><legend data-i18n="gui_policy_dec">Policy Decision</legend><div class="radio-group">
+    <label><input type="radio" name="tr-pd" value="2" checked> <span data-i18n="gui_pd_blocked">Blocked</span></label>
+    <label><input type="radio" name="tr-pd" value="1"> <span data-i18n="gui_pd_potential">Potential</span></label>
+    <label><input type="radio" name="tr-pd" value="0"> <span data-i18n="gui_pd_allowed">Allowed</span></label>
+    <label><input type="radio" name="tr-pd" value="-1"> <span data-i18n="gui_pd_all">All</span></label>
   </div></fieldset>
-  <fieldset><legend>Filters</legend>
-    <div class="form-row"><div class="form-group"><label>Port</label><input id="tr-port" placeholder="e.g. 80, 443"></div><div class="form-group"><label>Protocol</label><select id="tr-proto"><option value="">Both</option><option value="6">TCP</option><option value="17">UDP</option></select></div></div>
-    <div class="form-row"><div class="form-group"><label>Source (Label/IP)</label><input id="tr-src" placeholder="e.g. role=Web, 10.0.0.0/8, 192.168.1.1"></div><div class="form-group"><label>Destination (Label/IP)</label><input id="tr-dst" placeholder="e.g. app=DB, 10.1.1.5"></div></div>
+  <fieldset><legend data-i18n="gui_col_filters">Filters</legend>
+    <div class="form-row"><div class="form-group"><label data-i18n="gui_port">Port</label><input id="tr-port" placeholder="e.g. 80, 443"></div><div class="form-group"><label data-i18n="gui_protocol">Protocol</label><select id="tr-proto"><option value="" data-i18n="gui_both">Both</option><option value="6" data-i18n="gui_tcp">TCP</option><option value="17" data-i18n="gui_udp">UDP</option></select></div></div>
+    <div class="form-row"><div class="form-group"><label data-i18n="gui_source">Source (Label/IP)</label><input id="tr-src" placeholder="e.g. role=Web, 10.0.0.0/8, 192.168.1.1"></div><div class="form-group"><label data-i18n="gui_dest">Destination (Label/IP)</label><input id="tr-dst" placeholder="e.g. app=DB, 10.1.1.5"></div></div>
   </fieldset>
-  <fieldset><legend>Excludes (Optional)</legend>
-    <div class="form-row-3"><div class="form-group"><label>Exclude Port</label><input id="tr-expt" placeholder="e.g. 22"></div><div class="form-group"><label>Exclude Source</label><input id="tr-exsrc" placeholder="e.g. env=Kube, 10.9.9.9"></div><div class="form-group"><label>Exclude Destination</label><input id="tr-exdst" placeholder="e.g. 8.8.8.8"></div></div>
+  <fieldset><legend data-i18n="gui_excludes">Excludes (Optional)</legend>
+    <div class="form-row-3"><div class="form-group"><label data-i18n="gui_ex_port">Exclude Port</label><input id="tr-expt" placeholder="e.g. 22"></div><div class="form-group"><label data-i18n="gui_ex_src">Exclude Source</label><input id="tr-exsrc" placeholder="e.g. env=Kube, 10.9.9.9"></div><div class="form-group"><label data-i18n="gui_ex_dest">Exclude Destination</label><input id="tr-exdst" placeholder="e.g. 8.8.8.8"></div></div>
   </fieldset>
-  <fieldset><legend>Threshold</legend>
-    <div class="form-row-3"><div class="form-group"><label>Count</label><input id="tr-cnt" type="number" value="10"></div><div class="form-group"><label>Window (min)</label><input id="tr-win" type="number" value="10"></div><div class="form-group"><label>Cooldown (min)</label><input id="tr-cd" type="number" value="10"></div></div>
+  <fieldset><legend data-i18n="gui_threshold">Threshold</legend>
+    <div class="form-row-3"><div class="form-group"><label data-i18n="gui_count">Count</label><input id="tr-cnt" type="number" value="10"></div><div class="form-group"><label data-i18n="gui_window_min">Window (min)</label><input id="tr-win" type="number" value="10"></div><div class="form-group"><label data-i18n="gui_cooldown">Cooldown (min)</label><input id="tr-cd" type="number" value="10"></div></div>
   </fieldset>
-  <div class="modal-actions"><button class="btn btn-primary" onclick="closeModal('m-traffic')">Cancel</button><button class="btn btn-success" onclick="saveTraffic()">💾 Save</button></div>
+  <div class="modal-actions"><button class="btn btn-primary" onclick="closeModal('m-traffic')" data-i18n="gui_cancel">Cancel</button><button class="btn btn-success" onclick="saveTraffic()" data-i18n="gui_save">💾 Save</button></div>
 </div></div>
 
 <!-- BW/Volume -->
 <div class="modal-bg" id="m-bw"><div class="modal">
-  <h2>Add Bandwidth / Volume Rule</h2>
-  <div class="form-group"><label>Rule Name</label><input id="bw-name"></div>
-  <fieldset><legend>Metric Type</legend><div class="radio-group">
-    <label><input type="radio" name="bw-mt" value="bandwidth" checked> Bandwidth (Mbps, Max)</label>
-    <label><input type="radio" name="bw-mt" value="volume"> Volume (MB, Sum)</label>
+  <h2><span data-i18n="gui_add_bw_rule" id="mb-title">Add Bandwidth / Volume Rule</span></h2>
+  <div class="form-group"><label data-i18n="gui_rule_name">Rule Name</label><input id="bw-name"></div>
+  <fieldset><legend data-i18n="gui_metric_type">Metric Type</legend><div class="radio-group">
+    <label><input type="radio" name="bw-mt" value="bandwidth" checked> <span data-i18n="gui_mt_bw">Bandwidth (Mbps, Max)</span></label>
+    <label><input type="radio" name="bw-mt" value="volume"> <span data-i18n="gui_mt_vol">Volume (MB, Sum)</span></label>
   </div></fieldset>
-  <fieldset><legend>Policy Decision</legend><div class="radio-group">
-    <label><input type="radio" name="bw-pd" value="2"> Blocked</label>
-    <label><input type="radio" name="bw-pd" value="1"> Potential</label>
-    <label><input type="radio" name="bw-pd" value="0"> Allowed</label>
-    <label><input type="radio" name="bw-pd" value="-1" checked> All</label>
+  <fieldset><legend data-i18n="gui_policy_dec">Policy Decision</legend><div class="radio-group">
+    <label><input type="radio" name="bw-pd" value="2"> <span data-i18n="gui_pd_blocked">Blocked</span></label>
+    <label><input type="radio" name="bw-pd" value="1"> <span data-i18n="gui_pd_potential">Potential</span></label>
+    <label><input type="radio" name="bw-pd" value="0"> <span data-i18n="gui_pd_allowed">Allowed</span></label>
+    <label><input type="radio" name="bw-pd" value="-1" checked> <span data-i18n="gui_pd_all">All</span></label>
   </div></fieldset>
-  <fieldset><legend>Filters</legend>
-    <div class="form-row-3"><div class="form-group"><label>Port</label><input id="bw-port" placeholder="e.g. 443"></div><div class="form-group"><label>Source (Label/IP)</label><input id="bw-src" placeholder="e.g. role=Web, 10.0.0.0/8"></div><div class="form-group"><label>Destination (Label/IP)</label><input id="bw-dst" placeholder="e.g. app=DB, 10.1.1.5"></div></div>
+  <fieldset><legend data-i18n="gui_col_filters">Filters</legend>
+    <div class="form-row-3"><div class="form-group"><label data-i18n="gui_port">Port</label><input id="bw-port" placeholder="e.g. 443"></div><div class="form-group"><label data-i18n="gui_source">Source (Label/IP)</label><input id="bw-src" placeholder="e.g. role=Web, 10.0.0.0/8"></div><div class="form-group"><label data-i18n="gui_dest">Destination (Label/IP)</label><input id="bw-dst" placeholder="e.g. app=DB, 10.1.1.5"></div></div>
   </fieldset>
-  <fieldset><legend>Excludes (Optional)</legend>
-    <div class="form-row-3"><div class="form-group"><label>Exclude Port</label><input id="bw-expt" placeholder="e.g. 22"></div><div class="form-group"><label>Exclude Source</label><input id="bw-exsrc" placeholder="e.g. env=Kube, 10.9.9.9"></div><div class="form-group"><label>Exclude Destination</label><input id="bw-exdst" placeholder="e.g. 8.8.8.8"></div></div>
+  <fieldset><legend data-i18n="gui_excludes">Excludes (Optional)</legend>
+    <div class="form-row-3"><div class="form-group"><label data-i18n="gui_ex_port">Exclude Port</label><input id="bw-expt" placeholder="e.g. 22"></div><div class="form-group"><label data-i18n="gui_ex_src">Exclude Source</label><input id="bw-exsrc" placeholder="e.g. env=Kube, 10.9.9.9"></div><div class="form-group"><label data-i18n="gui_ex_dest">Exclude Destination</label><input id="bw-exdst" placeholder="e.g. 8.8.8.8"></div></div>
   </fieldset>
-  <fieldset><legend>Threshold</legend>
-    <div class="form-row-3"><div class="form-group"><label>Value</label><input id="bw-val" type="number" value="100"></div><div class="form-group"><label>Window (min)</label><input id="bw-win" type="number" value="10"></div><div class="form-group"><label>Cooldown (min)</label><input id="bw-cd" type="number" value="30"></div></div>
+  <fieldset><legend data-i18n="gui_threshold">Threshold</legend>
+    <div class="form-row-3"><div class="form-group"><label data-i18n="gui_value">Value</label><input id="bw-val" type="number" value="100"></div><div class="form-group"><label data-i18n="gui_window_min">Window (min)</label><input id="bw-win" type="number" value="10"></div><div class="form-group"><label data-i18n="gui_cooldown">Cooldown (min)</label><input id="bw-cd" type="number" value="30"></div></div>
   </fieldset>
-  <div class="modal-actions"><button class="btn btn-primary" onclick="closeModal('m-bw')">Cancel</button><button class="btn btn-success" onclick="saveBW()">💾 Save</button></div>
+  <div class="modal-actions"><button class="btn btn-primary" onclick="closeModal('m-bw')" data-i18n="gui_cancel">Cancel</button><button class="btn btn-success" onclick="saveBW()" data-i18n="gui_save">💾 Save</button></div>
 </div></div>
 
 <!-- Help / Parameter Guide -->
@@ -688,6 +704,18 @@ const del=url=>api(url,{method:'DELETE'});
 const rv=name=>document.querySelector(`input[name="${name}"]:checked`)?.value;
 const setRv=(name,val)=>{const r=document.querySelector(`input[name="${name}"][value="${val}"]`);if(r)r.checked=true};
 let _editIdx=null; // null = add mode, number = edit mode
+let _translations={};
+
+async function loadTranslations(){
+  _translations=await api('/api/ui_translations');
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const k=el.getAttribute('data-i18n');
+    if(_translations[k]){
+      if(el.tagName==='INPUT'&&el.type==='button') el.value=_translations[k];
+      else el.textContent=_translations[k];
+    }
+  });
+}
 
 function toast(msg,err){const t=$('toast');t.textContent=msg;t.className='toast'+(err?' err':'')+' show';setTimeout(()=>t.className='toast',3000)}
 function dlog(msg){const l=$('d-log');l.textContent+='\n['+new Date().toLocaleTimeString()+'] '+msg;l.scrollTop=l.scrollHeight}
@@ -710,6 +738,8 @@ async function loadDashboard(){
   $('d-rules').textContent=d.rules_count;
   $('d-health').textContent=d.health_check?'ON':'OFF';
   $('d-lang').textContent=(d.language||'en').toUpperCase();
+  if(d.theme) document.documentElement.setAttribute('data-theme', d.theme);
+  await loadTranslations();
 }
 async function testConn(){
   dlog('Testing PCE connection...');
@@ -747,10 +777,20 @@ async function deleteSelected(){
   for(const i of ids) await del('/api/rules/'+i);
   toast('Deleted');loadRules();loadDashboard();
 }
-function openModal(id,isEdit){_editIdx=isEdit??null;$(id).classList.add('show');if(id==='m-event'&&!Object.keys(_catalog).length)loadCatalog();
+function openModal(id,isEdit){
+  _editIdx=isEdit??null;$(id).classList.add('show');if(id==='m-event'&&!Object.keys(_catalog).length)loadCatalog();
   // Update modal title
-  const h=$(id).querySelector('h2');
-  if(h){const base=h.textContent.replace(/^(Edit|Add) /,'');h.textContent=(_editIdx!==null?'Edit ':'Add ')+base}
+  let target;
+  if(id==='m-event') target=$('me-title');
+  else if(id==='m-traffic') target=$('mt-title');
+  else if(id==='m-bw') target=$('mb-title');
+  if(target){
+    const baseKey = id==='m-event'?'gui_add_event_rule':id==='m-traffic'?'gui_add_traffic_rule':'gui_add_bw_rule';
+    const editKey = id==='m-event'?'gui_edit_event_rule':id==='m-traffic'?'gui_edit_traffic_rule':'gui_edit_bw_rule';
+    const key = _editIdx!==null ? editKey : baseKey;
+    target.setAttribute('data-i18n', key);
+    if(_translations[key]) target.textContent=_translations[key];
+  }
 }
 function closeModal(id){$(id).classList.remove('show');_editIdx=null}
 async function loadCatalog(){
@@ -819,7 +859,7 @@ async function saveEvent(){
   const cat=$('ev-cat').value,ev=$('ev-type').value;
   if(!cat||!ev){toast('Select category and event','err');return}
   const name=(_catalog[cat]||{})[ev]||ev;
-  const data={name,filter_value:ev,threshold_type:rv('ev-tt'),threshold_count:$('ev-cnt').value,threshold_window:$('ev-win').value,cooldown_minutes:$('ev-cd').value,enable_health_check:$('ev-hc').checked};
+  const data={name,filter_value:ev,threshold_type:rv('ev-tt'),threshold_count:$('ev-cnt').value,threshold_window:$('ev-win').value,cooldown_minutes:$('ev-cd').value};
   if(_editIdx!==null) await put('/api/rules/'+_editIdx,data); else await post('/api/rules/event',data);
   closeModal('m-event');toast('Event rule saved');loadRules();loadDashboard();
 }
@@ -854,32 +894,53 @@ async function loadSettings(){
   const s=_settings,a=s.api||{},e=s.email||{},sm=s.smtp||{},al=s.alerts||{},st=s.settings||{};
   const active=al.active||[];
   $('s-form').innerHTML=`
-  <fieldset><legend>API Connection</legend>
-    <div class="form-row"><div class="form-group"><label>URL</label><input id="s-url" value="${a.url||''}"></div><div class="form-group"><label>Org ID</label><input id="s-org" value="${a.org_id||''}"></div></div>
-    <div class="form-row"><div class="form-group"><label>API Key</label><input id="s-key" value="${a.key||''}"></div><div class="form-group"><label>API Secret</label><input id="s-sec" type="password" value="${a.secret||''}"></div></div>
-    <div class="chk"><label><input type="checkbox" id="s-ssl" ${a.verify_ssl?'checked':''}> Verify SSL</label></div>
+  <fieldset><legend data-i18n="gui_api_conn">API Connection</legend>
+    <div class="form-row"><div class="form-group"><label data-i18n="gui_url">URL</label><input id="s-url" value="${a.url||''}"></div><div class="form-group"><label data-i18n="gui_org_id">Org ID</label><input id="s-org" value="${a.org_id||''}"></div></div>
+    <div class="form-row"><div class="form-group"><label data-i18n="gui_api_key">API Key</label><input id="s-key" value="${a.key||''}"></div><div class="form-group"><label data-i18n="gui_api_secret">API Secret</label><input id="s-sec" type="password" value="${a.secret||''}"></div></div>
+    <div class="chk"><label><input type="checkbox" id="s-ssl" ${a.verify_ssl?'checked':''}> <span data-i18n="gui_verify_ssl">Verify SSL</span></label></div>
   </fieldset>
-  <fieldset><legend>Email & SMTP</legend>
-    <div class="form-row"><div class="form-group"><label>Sender</label><input id="s-sender" value="${e.sender||''}"></div><div class="form-group"><label>Recipients (comma)</label><input id="s-rcpt" value="${(e.recipients||[]).join(', ')}"></div></div>
-    <div class="form-row"><div class="form-group"><label>SMTP Host</label><input id="s-smhost" value="${sm.host||''}"></div><div class="form-group"><label>Port</label><input id="s-smport" value="${sm.port||25}"></div></div>
-    <div class="form-row"><div class="form-group"><label>User</label><input id="s-smuser" value="${sm.user||''}"></div><div class="form-group"><label>Password</label><input id="s-smpass" type="password" value="${sm.password||''}"></div></div>
+  <fieldset><legend data-i18n="gui_email_smtp">Email & SMTP</legend>
+    <div class="form-row"><div class="form-group"><label data-i18n="gui_sender">Sender</label><input id="s-sender" value="${e.sender||''}"></div><div class="form-group"><label data-i18n="gui_recipients">Recipients (comma)</label><input id="s-rcpt" value="${(e.recipients||[]).join(', ')}"></div></div>
+    <div class="form-row"><div class="form-group"><label data-i18n="gui_smtp_host">SMTP Host</label><input id="s-smhost" value="${sm.host||''}"></div><div class="form-group"><label data-i18n="gui_port">Port</label><input id="s-smport" value="${sm.port||25}"></div></div>
+    <div class="form-row"><div class="form-group"><label data-i18n="gui_user">User</label><input id="s-smuser" value="${sm.user||''}"></div><div class="form-group"><label data-i18n="gui_password">Password</label><input id="s-smpass" type="password" value="${sm.password||''}"></div></div>
     <div style="display:flex;gap:20px"><div class="chk"><label><input type="checkbox" id="s-tls" ${sm.enable_tls?'checked':''}> STARTTLS</label></div><div class="chk"><label><input type="checkbox" id="s-auth" ${sm.enable_auth?'checked':''}> Auth</label></div></div>
   </fieldset>
-  <fieldset><legend>Alert Channels</legend>
-    <div style="display:flex;gap:20px;margin-bottom:12px"><div class="chk"><label><input type="checkbox" id="s-amail" ${active.includes('mail')?'checked':''}> 📧 Mail</label></div><div class="chk"><label><input type="checkbox" id="s-aline" ${active.includes('line')?'checked':''}> 📱 LINE</label></div><div class="chk"><label><input type="checkbox" id="s-awh" ${active.includes('webhook')?'checked':''}> 🔗 Webhook</label></div></div>
-    <div class="form-row"><div class="form-group"><label>LINE Token</label><input id="s-ltok" value="${al.line_channel_access_token||''}"></div><div class="form-group"><label>LINE Target ID</label><input id="s-ltgt" value="${al.line_target_id||''}"></div></div>
-    <div class="form-group"><label>Webhook URL</label><input id="s-whurl" value="${al.webhook_url||''}"></div>
+  <fieldset><legend data-i18n="gui_alert_channels">Alert Channels</legend>
+    <div style="display:flex;gap:20px;margin-bottom:12px"><div class="chk"><label><input type="checkbox" id="s-amail" ${active.includes('mail')?'checked':''}> 📧 <span data-i18n="gui_mail">Mail</span></label></div><div class="chk"><label><input type="checkbox" id="s-aline" ${active.includes('line')?'checked':''}> 📱 <span data-i18n="gui_line">LINE</span></label></div><div class="chk"><label><input type="checkbox" id="s-awh" ${active.includes('webhook')?'checked':''}> 🔗 <span data-i18n="gui_webhook">Webhook</span></label></div></div>
+    <div class="form-row"><div class="form-group"><label data-i18n="gui_line_token">LINE Token</label><input id="s-ltok" value="${al.line_channel_access_token||''}"></div><div class="form-group"><label data-i18n="gui_line_target_id">LINE Target ID</label><input id="s-ltgt" value="${al.line_target_id||''}"></div></div>
+    <div class="form-group"><label data-i18n="gui_webhook_url">Webhook URL</label><input id="s-whurl" value="${al.webhook_url||''}"></div>
   </fieldset>
-  <fieldset><legend>Language</legend><div class="radio-group"><label><input type="radio" name="s-lang" value="en" ${st.language!=='zh_TW'?'checked':''}> English</label><label><input type="radio" name="s-lang" value="zh_TW" ${st.language==='zh_TW'?'checked':''}> 繁體中文</label></div></fieldset>`;
+  <fieldset><legend data-i18n="gui_lang_settings">Display & General</legend>
+    <div class="chk" style="margin-bottom:12px"><label><input type="checkbox" id="s-hc" ${st.enable_health_check!==false?'checked':''}> <span data-i18n="gui_enable_hc">Enable PCE Health Check</span></label></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label data-i18n="gui_language">Language</label>
+        <div class="radio-group">
+          <label><input type="radio" name="s-lang" value="en" ${st.language!=='zh_TW'?'checked':''}> <span data-i18n="gui_lang_en">English</span></label>
+          <label><input type="radio" name="s-lang" value="zh_TW" ${st.language==='zh_TW'?'checked':''}> <span data-i18n="gui_lang_zh">繁體中文</span></label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Theme</label>
+        <div class="radio-group">
+          <label><input type="radio" name="s-theme" value="dark" ${st.theme!=='light'?'checked':''}> <span data-i18n="gui_theme_dark">Dark Theme</span></label>
+          <label><input type="radio" name="s-theme" value="light" ${st.theme==='light'?'checked':''}> <span data-i18n="gui_theme_light">Light Theme</span></label>
+        </div>
+      </div>
+    </div>
+  </fieldset>`;
+  await loadTranslations();
 }
 async function saveSettings(){
   const active=[];if($('s-amail').checked)active.push('mail');if($('s-aline').checked)active.push('line');if($('s-awh').checked)active.push('webhook');
+  const theme = rv('s-theme');
+  document.documentElement.setAttribute('data-theme', theme);
   await post('/api/settings',{
     api:{url:$('s-url').value,org_id:$('s-org').value,key:$('s-key').value,secret:$('s-sec').value,verify_ssl:$('s-ssl').checked},
     email:{sender:$('s-sender').value,recipients:$('s-rcpt').value.split(',').map(s=>s.trim()).filter(Boolean)},
     smtp:{host:$('s-smhost').value,port:parseInt($('s-smport').value)||25,user:$('s-smuser').value,password:$('s-smpass').value,enable_tls:$('s-tls').checked,enable_auth:$('s-auth').checked},
     alerts:{active,line_channel_access_token:$('s-ltok').value,line_target_id:$('s-ltgt').value,webhook_url:$('s-whurl').value},
-    settings:{language:rv('s-lang')}
+    settings:{language:rv('s-lang'), theme: theme, enable_health_check:$('s-hc').checked}
   });
   toast('Settings saved');
 }

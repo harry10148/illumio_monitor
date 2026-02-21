@@ -94,9 +94,9 @@ The GUI is also accessible from CLI **Menu #10**.
 
 | Tab | Features |
 |:---|:---|
-| **Dashboard** | API status, active rules count, health check status, language. Test Connection & Refresh buttons. |
+| **Dashboard** | API status, active rules count, health check status, language/theme context. Test Connection & Refresh buttons. |
 | **Rules** | Full CRUD: **Add** (Event / Traffic / BW-Volume), **Edit** (✏️ per row, pre-fills modal), **Delete** (checkbox + batch delete) |
-| **Settings** | API connection, email/SMTP, alert channels (Mail/LINE/Webhook), language switch |
+| **Settings** | API connection, email/SMTP, alert channels (Mail/LINE/Webhook), language & theme toggle |
 | **Actions** | Run Monitor Once, Debug Mode (configurable window & policy decision), Send Test Alert, Load Best Practices (double confirmation) |
 
 ### Web GUI REST API Endpoints
@@ -106,7 +106,8 @@ For developers who want to extend the Web GUI or build automation:
 | Method | Endpoint | Description |
 |:---|:---|:---|
 | `GET` | `/` | Serve the SPA HTML page |
-| `GET` | `/api/status` | Dashboard data (version, API URL, rule count) |
+| `GET` | `/api/status` | Dashboard data (version, API URL, rule count, theme, language) |
+| `GET` | `/api/ui_translations` | Fetch active localization dictionary for GUI elements |
 | `GET` | `/api/event-catalog` | Full event type catalog (grouped by category) |
 | `GET` | `/api/rules` | List all rules with index |
 | `GET` | `/api/rules/<index>` | Get single rule by index |
@@ -227,7 +228,8 @@ python illumio_monitor.py --gui       # Web GUI (opens browser)
   },
   "settings": {
     "enable_health_check": true,
-    "language": "en"                         // "en" or "zh_TW"
+    "language": "en",                        // "en" or "zh_TW"
+    "theme": "light"                         // "light" or "dark"
   },
   "rules": []                                // Rules added via CLI or GUI
 }
@@ -474,9 +476,9 @@ python illumio_monitor.py --gui  # 自動開啟瀏覽器
 
 | 頁籤 | 功能 |
 |:---|:---|
-| **Dashboard** | API 狀態、規則數量、健康檢查、語言。測試連線與重新整理。 |
+| **Dashboard** | API 狀態、規則數量、健康檢查、語系與主題提示。測試連線與重新整理。 |
 | **Rules** | 完整 CRUD：**新增** (Event / Traffic / BW-Volume)、**編輯** (✏️ 按鈕，自動帶入現有值)、**刪除** (勾選批次刪除) |
-| **Settings** | API 連線、Email/SMTP、告警通道 (Mail/LINE/Webhook)、語言切換 |
+| **Settings** | API 連線、Email/SMTP、告警通道 (Mail/LINE/Webhook)、語言及明暗主題切換 |
 | **Actions** | 執行監控、除錯模式、發送測試告警、載入最佳實踐 (雙重確認) |
 
 ### Web GUI REST API 端點
@@ -485,7 +487,8 @@ python illumio_monitor.py --gui  # 自動開啟瀏覽器
 
 | 方法 | 端點 | 說明 |
 |:---|:---|:---|
-| `GET` | `/api/status` | Dashboard 資料 |
+| `GET` | `/api/status` | Dashboard 資料 (包含語言及主題狀態) |
+| `GET` | `/api/ui_translations` | 取得當前網頁元件所使用的翻譯字典檔 |
 | `GET` | `/api/rules` | 列出所有規則 |
 | `GET` | `/api/rules/<index>` | 取得單一規則 |
 | `POST` | `/api/rules/event` | 新增事件規則 |
