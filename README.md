@@ -2,7 +2,6 @@
 
 ![Version](https://img.shields.io/badge/Version-v1.0.0-blue?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.8%2B-yellow?style=flat-square&logo=python&logoColor=white)
-![Dependencies](https://img.shields.io/badge/Dependencies-Zero-brightgreen?style=flat-square)
 
 > **[English](#english)** | **[繁體中文](#繁體中文)**
 
