@@ -15,7 +15,7 @@ import threading
 import logging
 
 try:
-    from flask import Flask, request, jsonify
+    from flask import Flask, request, jsonify, render_template
     HAS_FLASK = True
 except ImportError:
     HAS_FLASK = False
@@ -100,13 +100,14 @@ FULL_EVENT_CATALOG = {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _create_app(cm: ConfigManager) -> 'Flask':
-    app = Flask(__name__)
+    PKG_DIR = os.path.dirname(os.path.abspath(__file__))
+    app = Flask(__name__, template_folder=os.path.join(PKG_DIR, 'templates'), static_folder=os.path.join(PKG_DIR, 'static'))
     app.config['JSON_AS_ASCII'] = False
 
     # ─── Frontend SPA ─────────────────────────────────────────────────────
     @app.route('/')
     def index():
-        return _SPA_HTML
+        return render_template('index.html')
 
     # ─── API: Status ──────────────────────────────────────────────────────
     @app.route('/api/ui_translations')
@@ -119,13 +120,51 @@ def _create_app(cm: ConfigManager) -> 'Flask':
     @app.route('/api/status')
     def api_status():
         cm.load()
+        
+        cooldowns = []
+        try:
+            PKG_DIR = os.path.dirname(os.path.abspath(__file__))
+            ROOT_DIR = os.path.dirname(PKG_DIR)
+            STATE_FILE = os.path.join(ROOT_DIR, "state.json")
+            if os.path.exists(STATE_FILE):
+                with open(STATE_FILE, 'r', encoding='utf-8') as f:
+                    state = json.load(f)
+                    
+                now = datetime.datetime.now(datetime.timezone.utc)
+                alert_history = state.get("alert_history", {})
+                
+                for rule in cm.config['rules']:
+                    rid = str(rule['id'])
+                    rem_mins = 0
+                    if rid in alert_history:
+                        try:
+                            last_alert_str = alert_history[rid]
+                            last_ts = datetime.datetime.strptime(last_alert_str, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc)
+                            cd_mins = int(rule.get('cooldown_minutes', 0))
+                            if cd_mins > 0:
+                                elapsed = (now - last_ts).total_seconds()
+                                total_cd = cd_mins * 60
+                                if elapsed < total_cd:
+                                    rem_mins = int((total_cd - elapsed) // 60) + 1
+                        except Exception as e:
+                            logger.error(f"Error parsing cooldown for rule {rid}: {e}")
+                    
+                    cooldowns.append({
+                        "id": rule['id'],
+                        "name": rule.get('name', 'Unknown Rule'),
+                        "remaining_mins": rem_mins
+                    })
+        except Exception as e:
+            logger.error(f"Error reading state file for cooldowns: {e}")
+
         return jsonify({
             "version": __version__,
             "api_url": cm.config['api']['url'],
             "rules_count": len(cm.config['rules']),
             "health_check": cm.config['settings'].get('enable_health_check', True),
             "language": cm.config.get('settings', {}).get('language', 'en'),
-            "theme": cm.config.get('settings', {}).get('theme', 'dark')
+            "theme": cm.config.get('settings', {}).get('theme', 'dark'),
+            "cooldowns": cooldowns
         })
 
     # ─── API: Event Catalog ───────────────────────────────────────────────
@@ -137,9 +176,41 @@ def _create_app(cm: ConfigManager) -> 'Flask':
     @app.route('/api/rules')
     def api_rules():
         cm.load()
+        
+        # Load state to get cooldowns
+        alert_history = {}
+        try:
+            PKG_DIR = os.path.dirname(os.path.abspath(__file__))
+            ROOT_DIR = os.path.dirname(PKG_DIR)
+            STATE_FILE = os.path.join(ROOT_DIR, "state.json")
+            if os.path.exists(STATE_FILE):
+                with open(STATE_FILE, 'r', encoding='utf-8') as f:
+                    state = json.load(f)
+                    alert_history = state.get("alert_history", {})
+        except Exception as e:
+            logger.error(f"Error reading state file for rules: {e}")
+
+        now = datetime.datetime.now(datetime.timezone.utc)
         rules = []
         for i, r in enumerate(cm.config['rules']):
-            rules.append({"index": i, **r})
+            rule_out = {"index": i, **r}
+            rem_mins = 0
+            rid = str(r['id'])
+            if rid in alert_history:
+                try:
+                    last_alert_str = alert_history[rid]
+                    last_ts = datetime.datetime.strptime(last_alert_str, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc)
+                    cd_mins = int(r.get('cooldown_minutes', 0))
+                    if cd_mins > 0:
+                        elapsed = (now - last_ts).total_seconds()
+                        total_cd = cd_mins * 60
+                        if elapsed < total_cd:
+                            rem_mins = int((total_cd - elapsed) // 60) + 1
+                except Exception as e:
+                    pass
+            rule_out['cooldown_remaining'] = rem_mins
+            rules.append(rule_out)
+            
         return jsonify(rules)
 
     @app.route('/api/rules/event', methods=['POST'])
@@ -319,6 +390,208 @@ def _create_app(cm: ConfigManager) -> 'Flask':
         cm.save()
         return jsonify({"ok": True})
 
+    @app.route('/api/dashboard/queries', methods=['GET'])
+    def api_get_dashboard_queries():
+        cm.load()
+        queries = cm.config.get('settings', {}).get('dashboard_queries', [])
+        return jsonify(queries)
+        
+    @app.route('/api/dashboard/queries', methods=['POST'])
+    def api_save_dashboard_query():
+        d = request.json or {}
+        cm.load()
+        if 'settings' not in cm.config:
+            cm.config['settings'] = {}
+        if 'dashboard_queries' not in cm.config['settings']:
+            cm.config['settings']['dashboard_queries'] = []
+            
+        name = d.get('name', 'My Query')
+        rank_by = d.get('rank_by', 'count')
+        pd_sel = int(d.get('pd', 3))
+        
+        src = (d.get('src') or '').strip()
+        dst = (d.get('dst') or '').strip()
+        src_label, src_ip = (src, None) if src and '=' in src else (None, src or None)
+        dst_label, dst_ip = (dst, None) if dst and '=' in dst else (None, dst or None)
+        
+        ex_src = (d.get('ex_src') or '').strip()
+        ex_dst = (d.get('ex_dst') or '').strip()
+        ex_src_label, ex_src_ip = (ex_src, None) if ex_src and '=' in ex_src else (None, ex_src or None)
+        ex_dst_label, ex_dst_ip = (ex_dst, None) if ex_dst and '=' in ex_dst else (None, ex_dst or None)
+        
+        port = d.get('port')
+        if port:
+            try: port = int(port)
+            except (ValueError, TypeError): port = None
+            
+        ex_port = d.get('ex_port')
+        if ex_port:
+            try: ex_port = int(ex_port)
+            except (ValueError, TypeError): ex_port = None
+            
+        proto = d.get('proto')
+        if proto:
+            try: proto = int(proto)
+            except (ValueError, TypeError): proto = None
+            
+        idx = d.get('idx')
+        query_def = {
+            "name": name,
+            "rank_by": rank_by,
+            "pd": pd_sel,
+            "port": port, "proto": proto,
+            "src_label": src_label, "dst_label": dst_label,
+            "src_ip_in": src_ip, "dst_ip_in": dst_ip,
+            "ex_port": ex_port,
+            "ex_src_label": ex_src_label, "ex_dst_label": ex_dst_label,
+            "ex_src_ip": ex_src_ip, "ex_dst_ip": ex_dst_ip
+        }
+        
+        if idx is not None and 0 <= int(idx) < len(cm.config['settings']['dashboard_queries']):
+            cm.config['settings']['dashboard_queries'][int(idx)] = query_def
+        else:
+            cm.config['settings']['dashboard_queries'].append(query_def)
+            
+        cm.save()
+        return jsonify({"ok": True})
+
+    @app.route('/api/dashboard/queries/<int:idx>', methods=['DELETE'])
+    def api_delete_dashboard_query(idx):
+        cm.load()
+        if 'settings' in cm.config and 'dashboard_queries' in cm.config['settings']:
+            if 0 <= idx < len(cm.config['settings']['dashboard_queries']):
+                cm.config['settings']['dashboard_queries'].pop(idx)
+                cm.save()
+                return jsonify({"ok": True})
+        return jsonify({"error": "not found"}), 404
+
+    @app.route('/api/dashboard/top10', methods=['POST'])
+    def api_dashboard_top10():
+        d = request.json or {}
+        mins = int(d.get('mins', 30))
+
+        pd_sel = int(d.get('pd_sel', 3))
+        rank_by = d.get('rank_by', 'count')
+        
+        try:
+            from src.api_client import ApiClient
+            from src.analyzer import Analyzer
+            from src.reporter import Reporter
+            api = ApiClient(cm)
+            ana = Analyzer(cm, api, Reporter(cm))
+
+            pds = ["blocked", "potentially_blocked", "allowed"]
+            if pd_sel == 2:
+                pds = ["blocked"]
+            elif pd_sel == 1:
+                pds = ["potentially_blocked"]
+            elif pd_sel == 0:
+                pds = ["allowed"]
+
+            now = datetime.datetime.now(datetime.timezone.utc)
+            start_dt = now - datetime.timedelta(minutes=mins)
+            
+            traffic_gen = api.execute_traffic_query_stream(
+                start_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                now.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                pds
+            )
+            traffic = list(traffic_gen) if traffic_gen else []
+            
+            aggr = {}
+            for f in traffic:
+                # Apply advanced filter matching if query provides filters
+                if not ana.check_flow_match(d, f, start_dt):
+                    continue
+                    
+                key = ana.get_traffic_details_key(f)
+                pd = f.get('pd')
+                if pd is None:
+                    raw_dec = str(f.get("policy_decision", "")).lower()
+                    if "blocked" in raw_dec and "potentially" not in raw_dec: pd = 2
+                    elif "potentially" in raw_dec: pd = 1
+                    elif "allowed" in raw_dec: pd = 0
+                    else: pd = -1
+                else:
+                    pd = int(pd)
+
+                if key not in aggr:
+                    # Capture rich attributes
+                    raw_src_name = "-"
+                    raw_src_wl = f.get('src', {}).get('workload', {})
+                    raw_src_labels = raw_src_wl.get('labels', []) if raw_src_wl else []
+                    if raw_src_wl:
+                        raw_src_name = raw_src_wl.get('name') or raw_src_wl.get('hostname') or "-"
+                    raw_src_ip = f.get('src', {}).get('ip', "-")
+                    
+                    raw_dst_name = "-"
+                    raw_dst_wl = f.get('dst', {}).get('workload', {})
+                    raw_dst_labels = raw_dst_wl.get('labels', []) if raw_dst_wl else []
+                    if raw_dst_wl:
+                        raw_dst_name = raw_dst_wl.get('name') or raw_dst_wl.get('hostname') or "-"
+                    raw_dst_ip = f.get('dst', {}).get('ip', "-")
+                    
+                    svc = f.get('service', {})
+                    sport = f.get('dst_port') or svc.get('port') or '-'
+                    sproto = f.get('proto') or svc.get('proto') or '-'
+                    if sproto == 6: sproto_str = "TCP"
+                    elif sproto == 17: sproto_str = "UDP"
+                    else: sproto_str = str(sproto)
+                    
+                    direction = "-"
+                    fd = f.get('flow_direction')
+                    if fd == 'inbound': direction = "IN"
+                    elif fd == 'outbound': direction = "OUT"
+                    
+                    ts_r = f.get('timestamp_range', {})
+                    t_first = ts_r.get('first_detected', f.get('timestamp','-')).replace('T',' ').split('.')[0]
+                    t_last = ts_r.get('last_detected', '-').replace('T',' ').split('.')[0]
+                
+                    aggr[key] = {
+                        'key': key, 'pd': pd, 'count': 0, 'volume': 0.0, 'bandwidth': 0.0, 'val_fmt': '',
+                        'first_seen': t_first, 'last_seen': t_last, 'dir': direction,
+                        's_name': raw_src_name, 's_ip': raw_src_ip, 's_labels': raw_src_labels,
+                        'd_name': raw_dst_name, 'd_ip': raw_dst_ip, 'd_labels': raw_dst_labels,
+                        'svc': f"{sport} / {sproto_str}"
+                    }
+                else:
+                    # Update timestamps if seen later/earlier
+                    ts_r = f.get('timestamp_range', {})
+                    curr_last = ts_r.get('last_detected', '-').replace('T',' ').split('.')[0]
+                    if curr_last > aggr[key]['last_seen']:
+                        aggr[key]['last_seen'] = curr_last
+                
+                if rank_by == 'bandwidth':
+                    bw, note, _, _ = ana.calculate_mbps(f)
+                    if bw > aggr[key]['bandwidth']:
+                        aggr[key]['bandwidth'] = bw
+                        from src.utils import format_unit
+                        aggr[key]['val_fmt'] = f"{format_unit(bw, 'bandwidth')} {note}"
+                elif rank_by == 'volume':
+                    vol, note = ana.calculate_volume_mb(f)
+                    aggr[key]['volume'] += vol
+                else:
+                    c = int(f.get("num_connections") or f.get("count", 1))
+                    aggr[key]['count'] += c
+
+            result = list(aggr.values())
+            if rank_by == 'bandwidth':
+                result.sort(key=lambda x: x['bandwidth'], reverse=True)
+            elif rank_by == 'volume':
+                result.sort(key=lambda x: x['volume'], reverse=True)
+                from src.utils import format_unit
+                for r in result:
+                    r['val_fmt'] = format_unit(r['volume'], 'volume')
+            else:
+                result.sort(key=lambda x: x['count'], reverse=True)
+                for r in result:
+                    r['val_fmt'] = str(r['count'])
+
+            top10 = result[:10]
+            return jsonify({"ok": True, "data": top10, "total": len(traffic)})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)})
+
     # ─── API: Actions ─────────────────────────────────────────────────────
     @app.route('/api/actions/run', methods=['POST'])
     def api_run_once():
@@ -490,10 +763,12 @@ fieldset { border:1px solid var(--border); border-radius:var(--radius); padding:
 legend { color:var(--accent2); font-weight:700; font-size:.9rem; padding:0 8px; }
 
 /* Table */
-.rule-table { width:100%; border-collapse:collapse; margin-top:12px; }
-.rule-table th, .rule-table td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--border); font-size:.88rem; }
-.rule-table th { color:var(--dim); font-weight:600; background:var(--bg2); }
+.rule-table { width:100%; border-collapse:collapse; margin-top:12px; table-layout:fixed; }
+.rule-table th, .rule-table td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--border); font-size:.88rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rule-table th { color:var(--dim); font-weight:600; background:var(--bg2); position:relative; }
 .rule-table tr:hover td { background:var(--bg3); }
+.resizer { position:absolute; top:25%; right:0; width:4px; height:50%; cursor:col-resize; user-select:none; z-index:2; transition: background 0.2s; background:var(--border); border-radius:2px; }
+.resizer:hover, .resizer:active { background:var(--accent); width:6px; }
 
 /* Log */
 .log-box { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:14px; font-family:'Cascadia Code','Fira Code',monospace; font-size:.82rem; color:var(--fg); max-height:360px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; line-height:1.6; }
@@ -548,16 +823,26 @@ legend { color:var(--accent2); font-weight:700; font-size:.9rem; padding:0 8px; 
 <!-- ═══ Dashboard ═══ -->
 <div class="panel active" id="p-dashboard">
   <div class="cards">
-    <div class="card"><div class="label" data-i18n="gui_api_status">API Status</div><div class="value" id="d-api">—</div></div>
     <div class="card"><div class="label" data-i18n="gui_active_rules">Active Rules</div><div class="value" id="d-rules">—</div></div>
     <div class="card"><div class="label" data-i18n="gui_health_check">Health Check</div><div class="value" id="d-health">—</div></div>
     <div class="card"><div class="label" data-i18n="gui_language">Language</div><div class="value" id="d-lang">—</div></div>
   </div>
-  <div style="display:flex;gap:8px;margin-bottom:14px;">
-    <button class="btn btn-primary" onclick="testConn()" data-i18n="gui_test_conn">🔗 Test Connection</button>
-    <button class="btn btn-primary" onclick="loadDashboard()" data-i18n="gui_refresh">🔄 Refresh</button>
-  </div>
-  <div class="log-box" id="d-log">[Ready]</div>
+  <fieldset id="cd-field" style="display:none;margin-bottom:14px;border:none;padding:0;">
+    <div id="cd-list" class="cards" style="margin-bottom:0;"></div>
+  </fieldset>
+  <fieldset style="margin-bottom:14px;">
+    <legend><span data-i18n="gui_top10_title" style="font-size:1.05rem;">Top 10 Query Report</span></legend>
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">
+       <label data-i18n="gui_window_min" style="font-weight:600;color:var(--dim);font-size:0.85rem;">Window (min):</label>
+       <input id="d-global-min" type="number" value="30" style="width:80px;background:var(--bg);border:1px solid var(--border);color:var(--fg);padding:4px 8px;border-radius:4px;">
+       <span style="flex:1"></span>
+       <button class="btn btn-warn btn-sm" onclick="openQueryModal()" data-i18n="gui_add_query_widget">➕ Add Query Widget</button>
+       <button class="btn btn-primary btn-sm" onclick="runAllQueries()" data-i18n="gui_run_all_queries">▶ Run All</button>
+    </div>
+    <div id="d-queries-container" style="display:flex;flex-direction:column;gap:16px;">
+        <!-- Query Profile Tables generated dynamically -->
+    </div>
+  </fieldset>
 </div>
 
 <!-- ═══ Rules ═══ -->
@@ -573,13 +858,20 @@ legend { color:var(--accent2); font-weight:700; font-size:.9rem; padding:0 8px; 
     <button class="btn btn-danger btn-sm" onclick="deleteSelected()" data-i18n="gui_delete">🗑 Delete</button>
   </div>
   <table class="rule-table">
-    <thead><tr><th style="width:30px"><input type="checkbox" id="r-chkall" onchange="toggleAll(this)"></th><th data-i18n="gui_col_type">Type</th><th data-i18n="gui_col_name">Name</th><th data-i18n="gui_col_condition">Condition</th><th data-i18n="gui_col_filters">Filters</th><th style="width:50px" data-i18n="gui_col_edit">Edit</th></tr></thead>
+    <thead><tr><th style="width:30px"><input type="checkbox" id="r-chkall" onchange="toggleAll(this)"></th><th data-i18n="gui_col_type">Type</th><th data-i18n="gui_col_name">Name</th><th style="width:110px" data-i18n="gui_col_status">Status</th><th data-i18n="gui_col_condition">Condition</th><th data-i18n="gui_col_filters">Filters</th><th style="width:50px" data-i18n="gui_col_edit">Edit</th></tr></thead>
     <tbody id="r-body"></tbody>
   </table>
 </div>
 
 <!-- ═══ Settings ═══ -->
 <div class="panel" id="p-settings">
+  <div class="cards" style="margin-bottom:14px;">
+    <div class="card"><div class="label" data-i18n="gui_api_status">API Status</div><div class="value" id="d-api">—</div></div>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:14px;">
+    <button class="btn btn-primary" onclick="testConn()" data-i18n="gui_test_conn">🔗 Test Connection</button>
+  </div>
+  <div class="log-box" id="s-log" style="height:80px;margin-bottom:14px;font-size:0.85rem;">[Ready]</div>
   <div id="s-form"></div>
   <div style="text-align:right;margin-top:16px;">
     <button class="btn btn-success" onclick="saveSettings()" data-i18n="gui_save_all">💾 Save All Settings</button>
@@ -605,6 +897,27 @@ legend { color:var(--accent2); font-weight:700; font-size:.9rem; padding:0 8px; 
 </div>
 
 <!-- ═══ Modals ═══ -->
+<!-- Dashboard Query Profile Modal -->
+<div class="modal-bg" id="m-query"><div class="modal">
+  <h2><span data-i18n="gui_add_query_widget" id="mq-title">Add Query Widget</span></h2>
+  <input type="hidden" id="dq-idx" value="-1">
+  <div class="form-row"><div class="form-group"><label data-i18n="gui_query_widget_name">Widget Name</label><input id="dq-name" placeholder="E.g. Core Services Top Clients"></div><div class="form-group"><label data-i18n="gui_rank_by">Rank By</label><select id="dq-rank"><option value="count" data-i18n="gui_rank_count">Connection Count</option><option value="volume" data-i18n="gui_rank_volume">Total Volume (MB)</option><option value="bandwidth" data-i18n="gui_rank_bw">Max Bandwidth (Mbps)</option></select></div></div>
+  <fieldset><legend data-i18n="gui_policy_dec">Policy Decision</legend><div class="radio-group" id="dq-pd-group">
+    <label><input type="radio" name="dq-pd" value="3" checked> <span data-i18n="gui_pd_all">All</span></label>
+    <label><input type="radio" name="dq-pd" value="2"> <span data-i18n="gui_pd_blocked">Blocked</span></label>
+    <label><input type="radio" name="dq-pd" value="1"> <span data-i18n="gui_pd_potential">Potential</span></label>
+    <label><input type="radio" name="dq-pd" value="0"> <span data-i18n="gui_pd_allowed">Allowed</span></label>
+  </div></fieldset>
+  <fieldset><legend data-i18n="gui_col_filters">Filters</legend>
+    <div class="form-row"><div class="form-group"><label data-i18n="gui_port">Port</label><input id="dq-port" placeholder="e.g. 80, 443"></div><div class="form-group"><label data-i18n="gui_protocol">Protocol</label><select id="dq-proto"><option value="" data-i18n="gui_both">Both</option><option value="6" data-i18n="gui_tcp">TCP</option><option value="17" data-i18n="gui_udp">UDP</option></select></div></div>
+    <div class="form-row"><div class="form-group"><label data-i18n="gui_source">Source (Label/IP)</label><input id="dq-src" placeholder="e.g. role=Web, 10.0.0.0/8, 192.168.1.1"></div><div class="form-group"><label data-i18n="gui_dest">Destination (Label/IP)</label><input id="dq-dst" placeholder="e.g. app=DB, 10.1.1.5"></div></div>
+  </fieldset>
+  <fieldset><legend data-i18n="gui_excludes">Excludes (Optional)</legend>
+    <div class="form-row-3"><div class="form-group"><label data-i18n="gui_ex_port">Exclude Port</label><input id="dq-expt" placeholder="e.g. 22"></div><div class="form-group"><label data-i18n="gui_ex_src">Exclude Source</label><input id="dq-exsrc" placeholder="e.g. env=Kube, 10.9.9.9"></div><div class="form-group"><label data-i18n="gui_ex_dest">Exclude Destination</label><input id="dq-exdst" placeholder="e.g. 8.8.8.8"></div></div>
+  </fieldset>
+  <div class="modal-actions"><button class="btn btn-primary" onclick="closeModal('m-query')" data-i18n="gui_cancel">Cancel</button><button class="btn btn-success" onclick="saveDashboardQuery()" data-i18n="gui_save">💾 Save</button></div>
+</div></div>
+
 <!-- Event -->
 <div class="modal-bg" id="m-event"><div class="modal">
   <h2><span data-i18n="gui_add_event_rule" id="me-title">Add Event Rule</span></h2>
@@ -717,8 +1030,38 @@ async function loadTranslations(){
   });
 }
 
+function initTableResizers() {
+  document.querySelectorAll('.rule-table').forEach(table => {
+    const ths = table.querySelectorAll('th');
+    ths.forEach(th => {
+      if (th.querySelector('.resizer')) return;
+      const resizer = document.createElement('div');
+      resizer.classList.add('resizer');
+      th.appendChild(resizer);
+      let startX, startWidth;
+      resizer.addEventListener('mousedown', function(e) {
+        startX = e.pageX;
+        startWidth = th.offsetWidth;
+        document.body.style.cursor = 'col-resize';
+        const onMouseMove = (e) => {
+          const newWidth = startWidth + (e.pageX - startX);
+          th.style.width = Math.max(newWidth, 30) + 'px';
+        };
+        const onMouseUp = () => {
+          document.body.style.cursor = 'default';
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+        };
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+    });
+  });
+}
+
 function toast(msg,err){const t=$('toast');t.textContent=msg;t.className='toast'+(err?' err':'')+' show';setTimeout(()=>t.className='toast',3000)}
 function dlog(msg){const l=$('d-log');l.textContent+='\n['+new Date().toLocaleTimeString()+'] '+msg;l.scrollTop=l.scrollHeight}
+function slog(msg){const l=$('s-log');if(l){l.textContent+='\n['+new Date().toLocaleTimeString()+'] '+msg;l.scrollTop=l.scrollHeight}}
 function alog(msg){const l=$('a-log');l.textContent+='\n'+msg;l.scrollTop=l.scrollHeight}
 
 /* ─── Tabs ────────────────────────────────────────────────────────── */
@@ -739,13 +1082,240 @@ async function loadDashboard(){
   $('d-health').textContent=d.health_check?'ON':'OFF';
   $('d-lang').textContent=(d.language||'en').toUpperCase();
   if(d.theme) document.documentElement.setAttribute('data-theme', d.theme);
+
+  if (d.cooldowns && d.cooldowns.length > 0) {
+    const activeCds = d.cooldowns.filter(c => c.remaining_mins > 0).length;
+    if (activeCds > 0) {
+      const title = _translations['gui_cooldown_title'] || 'Rules in Cooldown';
+      $('cd-field').style.display='block';
+      $('cd-list').innerHTML = `<div class="card" style="border-color:var(--warn);"><div class="label" style="color:var(--warn);"><span style="margin-right:4px;">⏳</span>${title}</div><div class="value" style="color:var(--warn);">${activeCds}</div></div>`;
+    } else {
+      $('cd-field').style.display='none';
+      $('cd-list').innerHTML='';
+    }
+  } else {
+    $('cd-field').style.display='none';
+    $('cd-list').innerHTML='';
+  }
+
   await loadTranslations();
+  await loadDashboardQueries();
 }
 async function testConn(){
-  dlog('Testing PCE connection...');
+  slog('Testing PCE connection...');
   const r=await post('/api/actions/test-connection',{});
-  if(r.ok){$('d-api').textContent='Connected';$('d-api').className='value ok';dlog('✅ Connected (HTTP '+r.status+')')}
-  else{$('d-api').textContent='Error';$('d-api').className='value err';dlog('❌ '+( r.error||r.body))}
+  if(r.ok){$('d-api').textContent='Connected';$('d-api').className='value ok';slog('✅ Connected (HTTP '+r.status+')')}
+  else{$('d-api').textContent='Error';$('d-api').className='value err';slog('❌ '+( r.error||r.body))}
+}
+
+let _dashboardQueries = [];
+
+async function loadDashboardQueries() {
+  const rt = await window.fetch('/api/dashboard/queries');
+  _dashboardQueries = await rt.json() || [];
+  renderDashboardQueries();
+}
+
+const escapeHtml = (unsafe) => {
+    return (unsafe || '').toString()
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+};
+
+function renderDashboardQueries() {
+  const container = $('d-queries-container');
+  let html = '';
+  if(_dashboardQueries.length === 0){
+      html = `<div style="text-align:center;padding:20px;color:var(--dim);font-size:0.9rem;">${_translations['gui_top10_empty']||'No data.'}</div>`;
+  } else {
+      _dashboardQueries.forEach((q, i) => {
+          let badgeColor = "var(--primary)";
+          if(q.pd === 2) badgeColor = "var(--danger)";
+          else if(q.pd === 1) badgeColor = "var(--warn)";
+          else if(q.pd === 0) badgeColor = "var(--success)";
+          
+          let rankLabel = q.rank_by === 'bandwidth' ? 'Max Bandwidth (Mbps)' : (q.rank_by === 'volume' ? 'Total Volume (MB)' : 'Connection Count');
+          html += `
+          <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;">
+             <div style="display:flex;align-items:center;min-height:30px;">
+                <strong style="margin-right:12px;font-size:0.95rem;color:var(--accent2);">${escapeHtml(q.name)}</strong>
+                <span style="font-size:10px;background:${badgeColor};color:#fff;padding:2px 6px;border-radius:4px;margin-right:8px;">PD: ${q.pd===3?'All':(q.pd===2?'Blocked':(q.pd===1?'Potential':'Allowed'))}</span>
+                <span style="font-size:10px;background:var(--dim);color:#fff;padding:2px 6px;border-radius:4px;margin-right:8px;">${rankLabel}</span>
+                <span style="flex:1"></span>
+                <span id="d-qstate-${i}" style="color:var(--dim);font-size:0.8rem;margin-right:12px;"></span>
+                <button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border);margin-right:6px;" onclick="openQueryModal(${i})">✏️</button>
+                <button class="btn btn-primary btn-sm" onclick="runTop10Query(${i})" data-i18n="gui_run_btn">Run</button>
+             </div>
+             
+             <table class="rule-table" style="margin-top:10px;border-top:1px solid var(--border);font-size:0.8rem;">
+              <thead><tr>
+                <th style="width:25px">#</th>
+                <th style="width:100px" data-i18n="gui_value">Value</th>
+                <th style="width:110px">First/Last Seen</th>
+                <th style="width:40px;text-align:center;">Dir</th>
+                <th>Source</th>
+                <th>Destination</th>
+                <th style="width:70px">Service</th>
+                <th style="width:70px" data-i18n="gui_policy_dec">Decision</th>
+              </tr></thead>
+              <tbody id="d-qbody-${i}">
+                <tr><td colspan="8" style="text-align:center;color:var(--dim);padding:20px;">${_translations['gui_top10_empty']||'No data. Click Run to query.'}</td></tr>
+              </tbody>
+             </table>
+          </div>`;
+      });
+  }
+  container.innerHTML = html;
+  initTableResizers();
+  
+  if (typeof applyLang === "function") applyLang();
+  else loadTranslations().catch(console.error);
+}
+
+function openQueryModal(idx = -1) {
+  $('dq-idx').value = idx;
+  if (idx < 0) {
+      $('mq-title').textContent = _translations['gui_add_query_widget'] || 'Add Query Widget';
+      $('dq-name').value = '';
+      $('dq-rank').value = 'count';
+      document.querySelector('input[name="dq-pd"][value="3"]').checked = true;
+      $('dq-port').value = ''; $('dq-proto').value = '';
+      $('dq-src').value = ''; $('dq-dst').value = '';
+      $('dq-expt').value = ''; $('dq-exsrc').value = ''; $('dq-exdst').value = '';
+  } else {
+      $('mq-title').textContent = 'Edit Query Widget';
+      const q = _dashboardQueries[idx];
+      $('dq-name').value = q.name || '';
+      $('dq-rank').value = q.rank_by || 'count';
+      const pdRad = document.querySelector(`input[name="dq-pd"][value="${q.pd}"]`);
+      if(pdRad) pdRad.checked = true;
+      $('dq-port').value = q.port || ''; 
+      $('dq-proto').value = q.proto || '';
+      $('dq-src').value = (q.src_label||'')+(q.src_ip_in? (q.src_label? ', ':'')+q.src_ip_in : '');
+      $('dq-dst').value = (q.dst_label||'')+(q.dst_ip_in? (q.dst_label? ', ':'')+q.dst_ip_in : '');
+      $('dq-expt').value = q.ex_port || '';
+      $('dq-exsrc').value = (q.ex_src_label||'')+(q.ex_src_ip? (q.ex_src_label? ', ':'')+q.ex_src_ip : '');
+      $('dq-exdst').value = (q.ex_dst_label||'')+(q.ex_dst_ip? (q.ex_dst_label? ', ':'')+q.ex_dst_ip : '');
+  }
+  let btn = document.querySelector('#m-query .modal-actions');
+  let isEdit = idx >= 0;
+  if(isEdit && !document.getElementById('m-query-del')){
+    let delBtn = document.createElement('button');
+    delBtn.id = 'm-query-del';
+    delBtn.className = 'btn btn-danger';
+    delBtn.innerText = _translations['gui_delete'] || 'Delete';
+    delBtn.style.marginRight = 'auto';
+    delBtn.onclick = () => deleteTop10Query(idx);
+    btn.insertBefore(delBtn, btn.firstChild);
+  } else if (!isEdit && document.getElementById('m-query-del')) {
+    document.getElementById('m-query-del').remove();
+  }
+  
+  const m = $('m-query');
+  if (m) m.classList.add('show');
+}
+
+async function saveDashboardQuery() {
+    const idx = parseInt($('dq-idx').value);
+    const pdMatch = document.querySelector('input[name="dq-pd"]:checked');
+    const d = {
+        idx: idx >= 0 ? idx : null,
+        name: $('dq-name').value,
+        rank_by: $('dq-rank').value,
+        pd: pdMatch ? parseInt(pdMatch.value) : 3,
+        port: parseInt($('dq-port').value) || null,
+        proto: parseInt($('dq-proto').value) || null,
+        src: $('dq-src').value, dst: $('dq-dst').value,
+        ex_port: parseInt($('dq-expt').value) || null,
+        ex_src: $('dq-exsrc').value, ex_dst: $('dq-exdst').value
+    };
+    
+    // Quick API helper if not strictly using fetch directly
+    const r = await fetch('/api/dashboard/queries', {
+      method: 'POST', body: JSON.stringify(d), headers: {'Content-Type': 'application/json'}
+    }).then(res => res.json());
+    
+    if(r.ok) { 
+        const m = $('m-query');
+        if (m) m.classList.remove('show');
+        await loadDashboardQueries(); 
+    }
+    else alert("Error: " + r.error);
+}
+
+async function deleteTop10Query(idx) {
+    if(!confirm("Delete this widget?")) return;
+    const r = await fetch('/api/dashboard/queries/'+idx, {method:'DELETE'}).then(res => res.json());
+    if(r.ok) { 
+        const m = $('m-query');
+        if (m) m.classList.remove('show');
+        await loadDashboardQueries(); 
+    }
+    else alert("Delete failed");
+}
+
+async function runAllQueries() {
+    for(let i=0; i<_dashboardQueries.length; i++) {
+        await runTop10Query(i);
+    }
+}
+
+async function runTop10Query(idx){
+  const q = _dashboardQueries[idx];
+  const ms=$(`d-qstate-${idx}`), bd=$(`d-qbody-${idx}`);
+  if(!ms || !bd) return;
+  
+  const payload = { ...q, mins: parseInt($('d-global-min').value)||30 };
+  
+  ms.textContent = _translations['gui_top10_querying']||'Querying...'; 
+  bd.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:20px;">${_translations['gui_top10_loading']||'Loading...'}</td></tr>`;
+  
+  try {
+    const r = await fetch('/api/dashboard/top10', {
+      method: 'POST', body: JSON.stringify(payload), headers: {'Content-Type': 'application/json'}
+    }).then(res => res.json());
+    if(!r.ok) throw new Error(r.error||'Unknown error');
+    
+    if(r.data && r.data.length){
+      let html='';
+      r.data.forEach((m,i)=>{
+        const pBadge = m.pd===2 ? `<span style="background:var(--danger);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;">Blocked</span>` :
+                       m.pd===1 ? `<span style="background:var(--warn);color:#000;padding:2px 6px;border-radius:4px;font-size:10px;">Potential</span>` :
+                       m.pd===0 ? `<span style="background:var(--success);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;">Allowed</span>` : m.pd;
+                       
+        const formatLabel = (labels) => {
+            if(!labels || !labels.length) return '';
+            return labels.map(l => `<span style="background:#e1ecf4;color:#2c5e77;padding:1px 4px;border-radius:4px;font-size:9px;margin-right:2px;display:inline-block;white-space:nowrap;margin-top:2px;">${escapeHtml(l.key)}:${escapeHtml(l.value)}</span>`).join('');
+        };
+        const sLabels = formatLabel(m.s_labels);
+        const dLabels = formatLabel(m.d_labels);
+                       
+        html+=`
+          <tr>
+            <td>${i+1}</td>
+            <td style="font-weight:bold;color:#6f42c1;">${m.val_fmt}</td>
+            <td style="font-size:10px;white-space:nowrap;">${m.first_seen}<br>${m.last_seen}</td>
+            <td style="text-align:center;">${m.dir}</td>
+            <td><strong style="font-size:11px;">${escapeHtml(m.s_name)}</strong><br><small style="color:var(--dim);">${escapeHtml(m.s_ip)}</small><br>${sLabels}</td>
+            <td><strong style="font-size:11px;">${escapeHtml(m.d_name)}</strong><br><small style="color:var(--dim);">${escapeHtml(m.d_ip)}</small><br>${dLabels}</td>
+            <td>${escapeHtml(m.svc)}</td>
+            <td>${pBadge}</td>
+          </tr>`;
+      });
+      bd.innerHTML=html;
+      ms.textContent = (_translations['gui_top10_found']||'Found {count} records. (Top 10)').replace('{count}', r.total);
+    } else {
+      bd.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:20px;">${_translations['gui_top10_no_records']||'No records found.'}</td></tr>`;
+      ms.textContent = _translations['gui_done']||'Done.';
+    }
+    initTableResizers();
+  } catch(e) {
+    ms.textContent = 'Error: '+e.message;
+    bd.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:20px;">${_translations['gui_top10_error']||'Error querying data.'}</td></tr>`;
+  }
 }
 
 /* ─── Rules ───────────────────────────────────────────────────────── */
@@ -754,20 +1324,35 @@ async function loadRules(){
   const rules=await api('/api/rules');
   $('r-badge').textContent=rules.length;
   const pdm={2:'Blocked',1:'Potential',0:'Allowed','-1':'All'};
+  
+  const cdTitle = _translations['gui_cooldown_active'] || 'Cooldown';
+  const readyTitle = _translations['gui_cooldown_ready'] || 'Ready';
+  const remTempl = _translations['gui_cooldown_remaining'] || '{mins}m remaining';
+  
   let html='';
   rules.forEach(r=>{
     const typ=r.type.charAt(0).toUpperCase()+r.type.slice(1);
     const unit={volume:' MB',bandwidth:' Mbps',traffic:' conns'}[r.type]||'';
     const cond='> '+r.threshold_count+unit+' (Win:'+r.threshold_window+'m CD:'+(r.cooldown_minutes||r.threshold_window)+'m)';
+    
+    let statusHtml = '';
+    if (r.cooldown_remaining > 0) {
+      const rem = remTempl.replace('{mins}', r.cooldown_remaining);
+      statusHtml = `<span style="background:var(--warn);color:#1a2c32;padding:2px 6px;border-radius:4px;font-size:0.75rem;font-weight:600;">⏳ ${cdTitle} (${rem})</span>`;
+    } else {
+      statusHtml = `<span style="background:var(--success);color:#fff;padding:2px 6px;border-radius:4px;font-size:0.75rem;font-weight:600;">✅ ${readyTitle}</span>`;
+    }
+    
     let f=[];
     if(r.type==='event') f.push('Event: '+r.filter_value);
     if(r.pd!==undefined&&r.pd!==null) f.push('PD:'+( pdm[r.pd]||r.pd));
     if(r.port) f.push('Port:'+r.port);
     if(r.src_label) f.push('Src:'+r.src_label);if(r.dst_label) f.push('Dst:'+r.dst_label);
     if(r.src_ip_in) f.push('SrcIP:'+r.src_ip_in);if(r.dst_ip_in) f.push('DstIP:'+r.dst_ip_in);
-    html+=`<tr><td><input type="checkbox" class="r-chk" data-idx="${r.index}"></td><td>${typ}</td><td>${r.name}</td><td>${cond}</td><td>${f.join(' | ')||'—'}</td><td><button class="btn btn-primary btn-sm" onclick="editRule(${r.index},'${r.type}')">✏️</button></td></tr>`;
+    html+=`<tr><td><input type="checkbox" class="r-chk" data-idx="${r.index}"></td><td title="${typ}">${typ}</td><td title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</td><td>${statusHtml}</td><td title="${cond}">${cond}</td><td title="${escapeHtml(f.join(' | '))}">${escapeHtml(f.join(' | '))||'—'}</td><td><button class="btn btn-primary btn-sm" onclick="editRule(${r.index},'${r.type}')">✏️</button></td></tr>`;
   });
-  $('r-body').innerHTML=html||'<tr><td colspan="6" style="color:var(--dim);text-align:center;padding:24px">No rules. Add one above.</td></tr>';
+  $('r-body').innerHTML=html||'<tr><td colspan="7" style="color:var(--dim);text-align:center;padding:24px">No rules. Add one above.</td></tr>';
+  initTableResizers();
 }
 function toggleAll(el){document.querySelectorAll('.r-chk').forEach(c=>c.checked=el.checked)}
 async function deleteSelected(){
@@ -967,6 +1552,7 @@ async function stopGui(){
   document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px"><h1 style="color:var(--accent2)">Web GUI Stopped</h1><p style="color:var(--dim)">You may close this tab. Restart from CLI or use --gui.</p></div>';
 }
 loadDashboard();
+testConn();
 </script>
 </body>
 </html>'''

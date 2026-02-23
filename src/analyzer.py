@@ -62,15 +62,16 @@ class Analyzer:
             self.state["processed_ids"] = self.state["processed_ids"][-2000:]
 
         try:
-            # Atomic write
+            # Atomic write using a temporary file
             dir_name = os.path.dirname(STATE_FILE) or '.'
             fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.tmp')
             try:
                 with os.fdopen(fd, 'w', encoding='utf-8') as f:
                     json.dump(self.state, f, ensure_ascii=False)
+                # os.replace is atomic and will overwrite the destination if it exists
                 os.replace(tmp_path, STATE_FILE)
-            except Exception:
-                # Clean up temp file on failure
+            except Exception as inner_e:
+                logger.error(f"Failed to atomically write state file: {inner_e}")
                 try:
                     os.unlink(tmp_path)
                 except OSError:
@@ -129,22 +130,21 @@ class Analyzer:
                     return False
 
         # Criteria Check
-        if rule["type"] == "traffic":
-            p = f.get("pd")
-            raw_dec = str(f.get("policy_decision", "")).lower()
-            flow_pd = -1
-            if p is not None:
-                flow_pd = int(p)
-            elif "blocked" in raw_dec and "potentially" not in raw_dec:
-                flow_pd = 2
-            elif "potentially" in raw_dec:
-                flow_pd = 1
-            elif "allowed" in raw_dec:
-                flow_pd = 0
+        p = f.get("pd")
+        raw_dec = str(f.get("policy_decision", "")).lower()
+        flow_pd = -1
+        if p is not None:
+            flow_pd = int(p)
+        elif "blocked" in raw_dec and "potentially" not in raw_dec:
+            flow_pd = 2
+        elif "potentially" in raw_dec:
+            flow_pd = 1
+        elif "allowed" in raw_dec:
+            flow_pd = 0
 
-            target_pd = rule.get("pd", 2)
-            if target_pd != -1 and flow_pd != target_pd:
-                return False
+        target_pd = rule.get("pd", 3 if rule.get("type") == "traffic" else -1)
+        if target_pd != -1 and target_pd != 3 and flow_pd != target_pd:
+            return False
 
         if rule.get("port"):
             f_port = f.get("dst_port") or f.get("service", {}).get("port")

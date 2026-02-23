@@ -203,11 +203,19 @@ class Reporter:
         
         try:
             req = urllib.request.Request(webhook_url, data=data, headers=headers, method="POST")
-            with urllib.request.urlopen(req) as response:
+            with urllib.request.urlopen(req, timeout=10) as response:
                 if response.status in [200, 201, 202, 204]:
                     print(f"{Colors.GREEN}{t('webhook_alert_sent')}{Colors.ENDC}")
                 else:
                     print(f"{Colors.FAIL}{t('webhook_alert_failed', error='', status=response.status)}{Colors.ENDC}")
+        except urllib.error.HTTPError as e:
+            try:
+                error_body = e.read().decode('utf-8')
+            except Exception:
+                error_body = "Could not read error body"
+            print(f"{Colors.FAIL}{t('webhook_alert_failed', error=f'{e} - {error_body}', status=e.code)}{Colors.ENDC}")
+        except (urllib.error.URLError, TimeoutError) as e:
+            print(f"{Colors.FAIL}{t('webhook_alert_failed', error=f'Connection Error/Timeout: {e}', status='')}{Colors.ENDC}")
         except Exception as e:
             print(f"{Colors.FAIL}{t('webhook_alert_failed', error=e, status='')}{Colors.ENDC}")
 

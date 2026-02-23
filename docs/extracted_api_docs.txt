@@ -1,0 +1,1140 @@
+Total extracted pages: 24
+
+--- Page 73 ---
+Description Resource Type Exposure
+agents/update GET [api_version][org_href]/agents
+GET [api_version][org_href]/agents/update
+Experimental
+Experimental
+audit_log_events GET [api_version][org_href]/audit_log_events Experimental
+auth_security_principals GET [api_version][org_href]/auth_securiuty_principals Experimental
+authentication_settings/
+password_policy
+GET [api_version][org_href]/authentication_settings/
+password_policy
+Experimental
+datafiles GET [api_version][org_href]/datafiles Experimental
+events GET [api_version][org_href]/events Experimental
+jobs GET [api_version][org_href]/jobs Experimental
+labels GET [api_version][org_href]/labels Both
+network_devices/
+network_endpoints
+GET [api_version][org_href]/network_devices/net-
+work_endpoints
+Experimental
+network_enforcement_nodes GET [api_version][org_href]/network_enforcement_nodes Experimental
+node_available GET [api_version][org_href]/node_available Both
+Pairing Profiles GET [api_version][org_href]/pairing_profiles Experimental
+permissions GET [api_version][org_href]/permissions Experimental
+security_principals GET [api_version][org_href]/sec_policy/draft/securi-
+ty_principals
+Experimental
+system_events GET [api_version][org_href]/system_events
+vulnerability_reports GET [api_version][org_href]/vulnerability_reports Experimental
+sec_policy/draft/
+allow GET [api_version][org_href]/sec_policy/draft/allow Experimental
+dependencies GET [api_version][org_href]/sec_policy/draft/depend-
+encies
+Experimental
+ip_lists GET [api_version][org_href]/sec_policy/draft/ip_lists Both
+label_groups GET [api_version][org_href]/sec_policy/draft/la-
+bel_groups
+Experimental
+label_groups/member-of GET [api_version][org_href]/sec_policy/draft/la-
+bel_groups/member-of
+Experimental
+modified_objects GET [api_version][org_href]/sec_policy/draft/modi-
+fied_objects
+Experimental
+REST APIs 25.2.10 and 25.2.20
+73
+
+--- Page 81 ---
+Description Resource Type Exposure
+agents/update GET [api_version][org_href]/agents
+GET [api_version][org_href]/agents/update
+Experimental
+Experimental
+audit_log_events GET [api_version][org_href]/audit_log_events Experimental
+auth_security_principals GET [api_version][org_href]/auth_securiuty_principals Experimental
+authentication_settings/
+password_policy
+GET [api_version][org_href]/authentication_settings/
+password_policy
+Experimental
+datafiles GET [api_version][org_href]/datafiles Experimental
+events GET [api_version][org_href]/events Experimental
+jobs GET [api_version][org_href]/jobs Experimental
+labels GET [api_version][org_href]/labels Both
+network_devices/
+network_endpoints
+GET [api_version][org_href]/network_devices/net-
+work_endpoints
+Experimental
+network_enforcement_nodes GET [api_version][org_href]/network_enforcement_nodes Experimental
+node_available GET [api_version][org_href]/node_available Both
+Pairing Profiles GET [api_version][org_href]/pairing_profiles Experimental
+permissions GET [api_version][org_href]/permissions Experimental
+security_principals GET [api_version][org_href]/sec_policy/draft/securi-
+ty_principals
+Experimental
+system_events GET [api_version][org_href]/system_events
+vulnerability_reports GET [api_version][org_href]/vulnerability_reports Experimental
+sec_policy/draft/
+allow GET [api_version][org_href]/sec_policy/draft/allow Experimental
+dependencies GET [api_version][org_href]/sec_policy/draft/depend-
+encies
+Experimental
+ip_lists GET [api_version][org_href]/sec_policy/draft/ip_lists Both
+label_groups GET [api_version][org_href]/sec_policy/draft/la-
+bel_groups
+Experimental
+label_groups/member-of GET [api_version][org_href]/sec_policy/draft/la-
+bel_groups/member-of
+Experimental
+modified_objects GET [api_version][org_href]/sec_policy/draft/modi-
+fied_objects
+Experimental
+REST APIs 25.2.10 and 25.2.20
+81
+
+--- Page 104 ---
+Properties for core services
+Property Description Type
+href The href of this detected core service String
+ip_address The ip address that is detected as core service String
+core_service_type Get all detected core services of a particular type, such as Splunk/NFS. The
+href will be given in the query parameter.
+String
+method_name The method by which this core service was detected String
+created_at The date at which core service was detected date/time
+updated_at The date core service was updated with action information. date/time
+confidence Confidence  of the detected core service.
+"minimum": 50, "maximum": 100"
+Integer
+feedback Feedback is provided for this core service recommendation, if any.
+"maxLength": 500
+String
+action Users can accept, skip, or reject the core service determination. String
+labels_applied Indicates if the end-user applied labels for this workload Boolean
+last_detected_at The core service detection algorithm last recommended Date core service. date/time
+workload Reference to traffic_flows_workload.schema.json Object
+Parameters for detected_core_services_summary
+Parameter Description Type Required
+core_service_type The unique identifier  for the core service type. A core service
+type is defined  by a name, port information and PCE-recom-
+mended labels
+String Yes
+recommended Total number of detected core services which are skipped or
+no decision has been made yet
+Integer No
+accepted Number of accepted recommendations Integer No
+rejected Number of recommendations rejected by the user Integer No
+REST APIs 25.2.10 and 25.2.20
+104
+
+--- Page 135 ---
+NOTE
+This API is only available for Illumio Core PCE installed on-premises and is not
+available for Illumio Cloud customers.
+About PCE Health API
+With this API, you can see the following health information:
+• How long has the PCE been running, what is its runlevel, and overall health (normal, warn-
+ing, or error).
+• Each node hostname, IP address, uptime, runlevel, and whether the PCE software runs
+properly.
+• Each node type (core or data) indicates whether the data node is the database replica or
+the primary database. The replication delay for the database replica is also displayed.
+• Information about PCE service alerts, such as the number of degraded or failed services in
+the cluster, so you can see where service failures have occurred.
+PCE Health API Method
+Functionality HTTP URI
+Check the health of the PCE. GET [api_version]/health
+Check PCE Health
+URI to Check PCE Health
+GET [api_version]/health
+PCE Health Reference
+This topic covers properties, parameters, and examples for PCE health.
+Check PCE Health
+Curl Command
+curl -i -X GET https://pce.my-company.com:8443/api/v2/health -H 'Accept: 
+application/json' -u $KEY:'TOKEN'
+REST APIs 25.2.10 and 25.2.20
+135
+
+--- Page 143 ---
+Events
+This Public Experimental API gets a collection of events or an individual event.
+NOTE
+Use this Events API instead of Audit Events.
+Events include logging a user in or out of the PCE, granting a user a role, pairing or unpairing
+a workload, and creating a label, ruleset, or IP list.
+Event Types
+For a complete list of JSON events, descriptions, CEF/LEEF success events, and CEF/LEEF
+failure events, see List of Event Types
+Event API Methods
+Functionality HTTP URI
+Get a collection of events. GET [api_version][org_href]/events
+Get an individual event. GET [api_version][event_href]
+Get Events
+This API gets a collection of events or a specific  event identified  by an event ID (in the form
+of a UUID).
+Get Events Collection
+When getting a collection of events, be aware of the following caveats:
+• Use the max_results query parameter to increase the maximum number of events re-
+turned.
+• The largest value accepted for max_results is 10000. To return more than 10000 events,
+use Asynchronous GET Collection.
+URI to Get a Collection of Events
+GET [api_version][org_href]/events
+URI to Get an Individual Event
+GET [api_version][event_href]
+Events Reference
+This topic covers properties, parameters, and examples of events.
+REST APIs 25.2.10 and 25.2.20
+143
+
+--- Page 145 ---
+Properties
+Parameter Description Type
+event_type The type of the event specified  by the event_type query parameter if given.
+If no query parameters are given, all event types are returned.
+See the response properties table below for types of events returned from a GET call.
+String
+status Status of the event: usually a mapping of api_status_code to a generic result string; nil
+if no action.
+For presentation purposes only.
+String
+severity Severity level of the events retrieved. Values include:
+• Warning (warning): A warning that the event is likely to occur if action is not taken.
+• Error (err)
+• Information (info): Normal operational messages can be harvested for reporting and
+measuring throughput, such as user pairing or unpairing workloads in the PCE web
+console.
+String
+created_by Information about the person, agent, or system that created the event.
+Created by system:
+• System : This appears only if the PCE generated the event.
+Created by user properties:
+• href: URI of the user who created the event.
+• username: The user name (usually formatted as an e-mail address).
+Created by workload properties:
+• href: URI of the agent on the workload that initiated the event.
+• hostname: The hostname of the workload.
+String
+Examples
+Curl Command to Get an Event
+You need the ID of the system event you want to get, which is the number at the end of its
+HREF path property: "/2/events/68632".
+curl -i -X GET https://pce.my-company.com:8443/api/v2/orgs/2/events/12345 
+-H "Accept: application/json" -u $KEY:$TOKEN
+Curl Command Get Event Collection
+In this example, only two events are returned because of max_events=2.
+curl -i -X GET https://pce.my-company.com:8443/api/v2/orgs/2/events?
+max_results=2 -H "Accept: application/json" -u $KEY:$TOKEN 
+Example Response
+REST APIs 25.2.10 and 25.2.20
+145
+
+--- Page 146 ---
+[
+  {
+    "href": "/orgs/1/events/xxxxxxx-5f59-46ab-8f18-xxxxxxxxx",
+    "timestamp": "2019-09-03T01:xx:xx.xxxZ",
+    "pce_fqdn": "pce.my-company.com",
+    "created_by": {
+      "agent": {
+        "href": "/orgs/1/agents/xxx",
+        "hostname": "xxx-xxxxx-xxxx"
+      }
+    },
+    "event_type": "agent.clone_detected",
+    "status": null,
+    "severity": "info",
+    "action": null,
+    "resource_changes": [],
+    "notifications": [
+      {
+        "uuid": "xxxxxxx-e04b-43bc-a64a-xxxxxxxxxx",
+        "notification_type": "agent.clone_detected",
+        "info": {
+          "agent": {
+            "href": "/orgs/1/agents/xxx",
+            "name": null,
+            "hostname": "xxx-xxxxx-xxxx"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "href": "/orgs/1/events/xxxxxxx-60a2-4db4-b0f4-xxxxxxxxxx",
+    "timestamp": "2019-09-03T0x:xx:xx.xxxZ",
+    "pce_fqdn": "pce.my-company.com",
+    "created_by": {
+      "agent": {
+        "href": "/orgs/1/agents/xxx",
+        "hostname": "xxx-xxxxx-xxxx"
+      }
+    },
+    ]
+  }
+]
+Organization Settings
+For Organization Settings examples, see Organization Settings Reference [147].
+Enabling clone detection
+Users sometimes need to disable clone detection as a safety valve. For example, if a custom-
+er has workloads in a particular environment that behave unexpectedly, they might end up
+with runaway clones being activated.
+REST APIs 25.2.10 and 25.2.20
+146
+
+--- Page 281 ---
+   "display_name": "Joe User"
+}
+Curl Command Create an Authorization Security Principal
+curl -i -X PUT https://pce.my-company.com:8443/api/v2/orgs/2/sec_policy/
+draft/services/79 -H "Content-Type:application/json" -u $KEY:$TOKEN -d 
+'{"type": "user", "name": "joe_user2@illumio.com", "display_name": "Joe 
+User"}' 
+Curl Command Delete the Authorization Security Principal
+curl -i -X DELETE -H "Accept: application/
+json" -u $KEY:$TOKEN https://pce.my-company.com:8443/api/v2/orgs/2/
+auth_security_principals/e8c232d2-e4bf-4ba5-bd77-ccfc3a8ad777
+Visualization
+In addition to reviewing workloads and traffic  with the PCE web console, you can analyze the
+traffic  flows  and get insight into the exposure to vulnerabilities using the Visualization API.
+The Explorer API is used to search and analyze PCE traffic  flows.  It queries the PCE's traffic
+database and analyzes these flows  for auditing, reporting, and troubleshooting. The VEN
+adds the DNS names to the flow  summary logs and sends them to the PCE, while the
+Explorer API appends the DNS names to allow auditors and analysts to view them without
+performing reverse look-ups on random IP addresses.
+Vulnerability Maps combine Illumio's Application Dependency Map with vulnerability data
+from Qualys Cloud Platform to provide insights into the exposure of vulnerabilities and attack
+paths across your applications.
+Explorer
+The Public Experimental Explorer APIs search and analyze PCE traffic  flows  for auditing,
+reporting, and troubleshooting. You can search for traffic  flows  between workloads or hosts,
+labeled workloads, or IP addresses, and you can restrict the search by specific  port numbers
+and protocols.
+Asynchronous Queries API Methods
+The maximum returned results when using the deprecated method POST [api_ver-
+sion][org_href]/traffic_flows/traffic_analysis_queries was 100,000, a reasonable number a
+user can view in the UI.
+When Explorer captures all traffic  flows  into a CSV file  to build rules offline,  the queries take
+longer to return, traffic  data contains more than 100,000 rows, and so on. Explorer queries
+are required to support both the single-node and multi-node Explorer in the SuperCluster
+environment.
+REST APIs 25.2.10 and 25.2.20
+281
+
+--- Page 282 ---
+The limitation of 100,000 results was raised to 200,000 to support SuperCluster environ-
+ments in Explorer better.
+Functionality HTTP URI
+Create a new async traffic  query. POST [api_version][org_href]traf-
+fic_flows/async_queries
+Get a collection of async traffic  queries. GET [api_version][org_href]traf-
+fic_flows/async_queries
+Download the completed async traffic  query results. GET [api_version][org_href]traf-
+fic_flows_async/queries/ :uuid/dow-
+load
+Update an async traffic  query (request cancellation of
+the queued async query).
+PUT [api_version][org_href]traf-
+fic_flows/async_queries/:uuid
+Delete the completed async traffic  query. DELETE [api_version][org_href]traf-
+fic_flows/async_queries/:uuid
+Explorer Reference
+This topic contains properties and examples for working with Explorer.
+REST APIs 25.2.10 and 25.2.20
+282
+
+--- Page 283 ---
+POST [api_version][org_href] traffic_flows/async_queries
+Property Description Type
+query_name Name of the query String
+sources Source labels, workloads, or IP addresses to include or exclude in the search.
+The response can contain up to five  matching IP addresses.
+Note: The response returns sources as destinations.
+Sources are treated as destinations for the purposes of the request; the response
+returns the source of an individual flow  as src.
+Sub-properties:
+• include: Targets that can be included are workloads, labels, or IP addresses iden-
+tified  by their HREF and structured as an array of JSON objects.
+If this property is left empty, then include means consider “ALL” or “ANY” of the
+object type.
+• exclude: Targets that can be excluded are workloads, labels, or IP addresses iden-
+tified  by their HREF and structured as a JSON array.
+• When IP List is present in the Destination part of a traffic  query, traffic  from
+workloads that belong to that IP List will not be returned by default.
+If users want to see that traffic,  they need to set exclude_workloads_
+from_ip_list_query: false
+• When IP List is present in the Source part of traffic  query, traffic  to workloads
+that belong to that IP List will not be returned by default.
+If the user wishes to see that traffic,  they need to set
+exclude_workloads_from_ip_ list_query: false
+Object
+destinations Target labels, workloads, or IP addresses to include or exclude in the search.
+The response returns targets as providers.
+Required sub-properties:
+• include: Targets that can be included are workloads, labels, or IP addresses iden-
+tified  by their HREF and structured as an array of JSON objects.
+If this property is left empty, then include means consider “ALL” or “ANY” of the
+object type.
+• exclude: Targets that can be excluded are workloads, labels, or IP addresses iden-
+tified  by their HREF and structured as JSON.
+If this property is left empty, then exclude means exclude “NONE” of the object
+types.
+Object
+services Services (5-tuple of port/to_port/proto/process/service) to include or exclude. Not
+all properties of the service subobjects are required.
+Required properties:
+• include: List of included services (5-tuple of port/to_port/proto/process/service)
+• exclude: List of excluded services (5-tuple of port/to_port/proto/process/serv-
+ice)",
+Properties of the includeand exclude subobjects:
+• port: Port Number (integer 0-65535).
+Also the starting port when specifying a range.
+• to_port: High end of port range inclusive if specifying a range.
+If not specifying a range then don't send this:
+REST APIs 25.2.10 and 25.2.20
+283
+
+--- Page 285 ---
+GET [api_version][org_href] traffic_flows/async_queries_download
+Property Description Type Req
+src Reference to traffic_flows_endpoint.schema.json Yes
+dst Reference to traffic_flows_endpoint.schema.json Yes
+service Reference to traffic_flows_service.schema.json Yes
+num_connections The number of times this flow  was seen Integer Yes
+policy_decision Policy decision made String Yes
+draft_policy_deci-
+sion
+The draft policy decision of the flow  (added in release 23.2.10) String No
+timestamp_range Timestamp ranges for the flow  detected. Required properties are:
+first_detected
+last_detected
+Object Yes
+caps Reference to rbac_permission_types.schema.json Yes
+client_type The type of client that reported this flow String No
+Example Async Explorer Queries
+Curl command for POST traffic_flows_async_queries
+curl -i -u 
+api_1195cf055cf8a834c:148afd87ecc980900eaf10d6c54e6c0f607b22e0dbf768dd007e51
+e731096282 https://devtest0.ilabs.io:8443/api/v2/orgs/1/traffic_flows/
+async_queries -H "Content-Type: application/json" -X POST -d '{"sources":
+{"include":[[{"workload":{"href":"/orgs/1/workloads/a3ffb374-f6c6-4cce-
+ac57-642c66f1498f"}}]],"exclude":[]},"destinations":{"include":
+[[]],"exclude":[]},"services":{"include":[],"exclude":
+[]},"sources_destinations_query_op":"and","start_date":"2016-01-29T17:04:03.
+149Z","end_date":"2021-01-29T17:06:03.151Z","policy_decisions":
+[],"max_results":1000,"query_name":"worklaod test"}' 
+Response
+ HTTP/1.1 202 Accepted
+    content-location: 7734501b-74a2-47a4-9ded-77bf4ceea938
+    content-type: application/json
+    content-length: 615
+    x-request-id: 00c8fa00-dbd8-4a28-a5c7-354fb5ae3886
+    cache-control: no-store
+    x-frame-options: DENY
+    x-xss-protection: 1; mode=block
+    x-content-type-options: nosniff
+{"status":"queued","href":"/orgs/1/traffic_flows/async_queries/
+7734501b-74a2-47a4-9ded-77bf4ceea938","created_by":{"href":"/users/
+1"},"query_parameters":{"sources":{"include":[[{"workload":{"href":"/orgs/1/
+REST APIs 25.2.10 and 25.2.20
+285
+
+--- Page 286 ---
+workloads/a3ffb374-f6c6-4cce-ac57-642c66f1498f"}}]],"exclude":
+[]},"destinations":{"include":[[]],"exclude":[]},"services":{"include":
+[],"exclude":
+[]},"sources_destinations_query_op":"and","start_date":"2016-01-29T17:04:03.
+149Z","end_date":"2021-01-29T17:06:03.151Z","policy_decisions":
+[],"max_results":1000,"query_name":"worklaod 
+test"},"created_at":"2021-04-09T20:50:30Z","updated_at":"2021-04-09T20:50:30
+Z"}
+Curl command for GET traffic_flows/async_queries
+This query gets the collection of all async jobs for the current user, including anything that
+was already submitted.
+curl -i -u 
+api_1195cf055cf8a834c:148afd87ecc980900eaf10d6c54e6c0f607b22e0dbf768dd007e51
+e731096282 https://devtest0.ilabs.io:8443/api/v2/orgs/1/traffic_flows/
+async_queries
+Response
+HTTP/1.1 200 OK
+    content-type: application/json
+    content-length: 1510
+    x-request-id: fcf065e5-e465-4161-ba98-542182734c38
+    cache-control: no-store
+    x-frame-options: DENY
+    x-xss-protection: 1; mode=block
+    x-content-type-options: nosniff
+[{"matches_count":1984,"flows_count":1000,"status":"completed","href":"/
+orgs/1/traffic_flows/async_queries/88675fbd-a88e-44bd-
+b358-2d6f2fc4f95a","result":"/orgs/1/traffic_flows/async_queries/88675fbd-
+a88e-44bd-b358-2d6f2fc4f95a/download","created_by":{"href":"/users/
+1"},"query_parameters":{"sources":{"include":[[{"workload":{"href":"/orgs/1/
+workloads/a3ffb374-f6c6-4cce-ac57-642c66f1498f"}}]],"exclude":
+[]},"destinations":{"include":[[]],"exclude":[]},"services":{"include":
+[],"exclude":
+[]},"sources_destinations_query_op":"and","start_date":"2016-01-29T17:04:03.
+149Z","end_date":"2021-01-29T17:06:03.151Z","policy_decisions":
+[],"max_results":1000,"query_name":"worklaod 
+tesrrrrrt"},"created_at":"2021-04-09T20:50:19Z","updated_at":"2021-04-09T20:
+50:27Z"},
+{"matches_count":1984,"flows_count":1000,"status":"completed","href":"/
+orgs/1/traffic_flows/async_queries/
+7734501b-74a2-47a4-9ded-77bf4ceea938","result":"/orgs/1/traffic_flows/
+async_queries/7734501b-74a2-47a4-9ded-77bf4ceea938/download","created_by":
+{"href":"/users/1"},"query_parameters":{"sources":{"include":[[{"workload":
+{"href":"/orgs/1/workloads/a3ffb374-f6c6-4cce-
+ac57-642c66f1498f"}}]],"exclude":[]},"destinations":{"include":
+[[]],"exclude":[]},"services":{"include":[],"exclude":
+[]},"sources_destinations_query_op":"and","start_date":"2016-01-29T17:04:03.
+149Z","end_date":"2021-01-29T17:06:03.151Z","policy_decisions":
+[],"max_results":1000,"query_name":"worklaod 
+test"},"created_at":"2021-04-09T20:50:30Z","updated_at":"2021-04-09T20:50:32
+Z"
+REST APIs 25.2.10 and 25.2.20
+286
+
+--- Page 287 ---
+Curl command for GET traffic flows/async_queries/:uuid
+This query gets a specific  job included in the collection.
+curl -i -u $KEY:$TOKEN https://devtest0.ilabs.io:8443/api/v2/orgs/1/
+traffic_flows/async_queries/88675fbd-a88e-44bd-b358-2d6f2fc4f95a
+Response
+HTTP/1.1 200 OK
+    content-type: application/json
+    content-length: 756
+    x-request-id: f328b845-8542-4b96-a128-43aefdf7ba5a
+    cache-control: no-store
+    x-frame-options: DENY
+    x-xss-protection: 1; mode=block
+    x-content-type-options: nosniff
+{"matches_count":1984,"flows_count":1000,"status":"completed",
+"href":"/orgs/1/hanges for22.4.0 from the Wj/async_queries/88675fbd-
+a88e-44bd-b358-2d6f2fc4f95a",
+"result":"/orgs/1/traffic_flows/async_queries/88675fbd-a88e-44bd-
+b358-2d6f2fc4f95a/download",
+"created_by":{"href":"/users/1"},"query_parameters":{"sources":{"include":
+[[{"workload":{"href":"/orgs/1/workloads/a3ffb374-f6c6-4cce-
+ac57-642c66f1498f"}}]],"exclude":[]},"destinations":{"include":
+[[]],"exclude":[]},"services":{"include":[],"exclude":
+[]},"sources_destinations_query_op":"and","start_date":"2016-01-29T17:04:03.
+149Z","end_date":"2021-01-29T17:06:03.151Z","policy_decisions":
+[],"max_results":1000,"query_name":"worklaod 
+tesrrrrrt"},"created_at":"2021-04-09T20:50:19Z","updated_at":"2021-04-09T20:
+50:27Z"}
+Response for GET traffic_flows/async_queries/:uuid_download
+{         
+   "dst": {
+    "ip": "10.244.0.1",
+    "workload": {
+        "href": "/orgs/1/workloads/35d8efea-f230-4027-a8ee-5f20626c4d21",
+        "name": "wl3",
+        "labels": [
+            {
+            "key": "env"reserpine for 
+            "href": "/orgs/1/labels/7",
+            "value": "Production"
+            },
+            {
+            "key": "loc",
+            "href": "/orgs/1/labels/11",
+            "value": "Amazon"
+            },
+            {
+            "key": "role",
+            "href": "/orgs/1/labels/3",
+REST APIs 25.2.10 and 25.2.20
+287
+
+--- Page 401 ---
+2. Click Export > Export All to export all Organization events.
+3. To export a filtered  list of events, filter  the list and then click Export > Export Filtered to
+export only the filtered  view.
+4. Use the search filter  for events based on event type, severity, status, timestamp, and who
+generated them.
+Examples of Events
+This section presents examples of recorded events in JSON, CEF, and LEEF for various audit-
+ing needs.
+User Password Update Failed (JSON)
+This example event shows a user password change that failed validation. Event type
+user.update_password shows "status": "failure", and the notification  shows that the
+user's attempted new password did not meet complexity requirements.
+{
+        "href": "/orgs/1/events/xxxxxxxx-39bd-43f1-a680-cc17c6984925",
+        "timestamp": "2018-08-29T22:07:00.978Z",
+        "pce_fqdn": "pce1.bigco.com",
+        "created_by": {
+               "system": {}
+        },
+        "event_type": "user.update_password",
+        "status": "failure",
+        "severity": "info",
+        "action": {
+               "uuid": "xxxxxxxx-a5f7-4975-a2a5-b4dbd8b74493",
+               "api_endpoint": "/login/users/password/update",
+               "api_method": "PUT",
+               "http_status_code": 302,
+               "src_ip": "10.3.6.116"
+        },
+        "resource_changes": [],
+        "notifications": [{
+               "uuid": "xxxxxxxx-7b8e-4205-a62a-1f070d8a0ee2",
+               "notification_type": "user.pw_complexity_not_met",
+               "info": null
+        }, {
+               "uuid": "xxxxxxxx-9721-4971-b613-d15aa67a4ee7",
+               "notification_type": "user.pw_change_failure",
+               "info": {
+                       "reason": "Password must have minimum of 1 new 
+character(s)"
+               }
+        }],
+        "version": 2
+}
+Resource Updated (JSON)
+This example shows the before and after values of a successful update event rule_set.up-
+date. The name of the ruleset changed from "before": "rule_set_2" to "after":
+"rule_set_3".
+REST APIs 25.2.10 and 25.2.20
+401
+
+--- Page 402 ---
+{ "href": "/orgs/1/events/xxxxxxxx-8033-4f1a-83e9-fde57c425807",
+"timestamp": "2018-08-29T22:04:04.733Z",
+"pce_fqdn": "pce1.bigco.com",
+"created_by": {
+"user": {
+"href": "/users/1",
+"username": "albert.einstein@bigco.com"
+}
+},
+"event_type": "rule_set.update",
+"status": "success",
+"severity": "info",
+"action": {
+"uuid": "xxxxxxxx-7488-480b-9ef9-0cd2a8496004",
+"api_endpoint": "/api/v2/orgs/1/sec_policy/draft/rule_sets/6",
+"api_method": "PUT",
+"http_status_code": 204,
+"src_ip": "10.3.6.116"
+},
+"resource_changes": [{
+"uuid": "xxxxxxxx-1d13-4e5e-8f0b-e0e8bccc44e0",
+"resource": {
+"rule_set": {
+"href": "/orgs/1/sec_policy/draft/rule_sets/6",
+"name": "rule_set_3",
+"scopes": [
+[{
+"label": {
+"href": "/orgs/1/labels/19",
+"key": "app",
+"value": "app2"
+}
+}, {
+"label": {
+"href": "/orgs/1/labels/20",
+"key": "env",
+"value": "env2"
+}
+}, {
+"label": {
+"href": "/orgs/1/labels/21",
+"key": "loc",
+"value": "loc2"
+}
+}]
+]
+}
+},
+"changes": {
+"name": {
+"before": "rule_set_2",
+"after": "rule_set_3"
+}
+},
+"change_type": "update"
+REST APIs 25.2.10 and 25.2.20
+402
+
+--- Page 403 ---
+}],
+"notifications": [],
+"version": 2
+}
+Security Rule Created (JSON)
+In this example of a successful sec_rule composite event, a new security rule is created.
+Because this is a creation event, the before values are null.
+{ "href": "/orgs/1/events/xxxxxxxx-6d29-4905-ad32-ee863fb63697",
+"timestamp": "2018-08-29T21:48:28.954Z",
+"pce_fqdn": "pce24.bigco.com",
+"created_by": {
+"user": {
+"href": "/users/1",
+"username": "albert.einstein@bigco.com"
+}
+},
+"event_type": "sec_rule.create",
+"status": "success",
+"severity": "info",
+"action": {
+"uuid": "xxxxxxxx-165b-4e06-aaac-60e4d8b0b9a0",
+"api_endpoint": "/api/v2/orgs/1/sec_policy/draft/rule_sets/1/sec_rules",
+"api_method": "POST",
+"http_status_code": 201,
+"src_ip": "10.6.1.156"
+},
+"resource_changes": [{
+"uuid": "9fcf6feb-bf25-4de8-a68a-a50598df4cf6",
+"resource": {
+"sec_rule": {
+"href": "/orgs/1/sec_policy/draft/rule_sets/1/sec_rules/5"
+}
+},
+"changes": {
+"rule_list": {
+"before": null,
+"after": {
+"href": "/orgs/1/sec_policy/draft/rule_sets/1"
+}
+},
+"description": {
+"before": null,
+"after": "WinRM HTTP/HTTPS and RDP"
+},
+"type": {
+"before": null,
+"after": "SecRule"
+},
+"resolve_labels": {
+"before": null,
+"after": "1010"
+},
+"providers": {
+REST APIs 25.2.10 and 25.2.20
+403
+
+--- Page 404 ---
+"created": [{
+"source": true,
+"actors": "ams"
+}]
+},
+"destinations": {
+"created": [{
+"source": false,
+"actors": "ams"
+}, {
+"source": false,
+"ip_list": {
+"href": "/orgs/1/sec_policy/draft/ip_lists/1"
+}
+}]
+},
+"ingress_services": {
+"created": [{
+"href": "/orgs/1/sec_policy/draft/services/7",
+"name": "WinRM HTTP/HTTPS and RDP"
+}]
+}
+},
+"change_type": "create"
+}],
+"notifications": [],
+"version": 2
+}
+User Logged In (JSON)
+[
+{
+  "href": "/orgs/1/events/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "timestamp": "2019-06-25T23:34:12.948Z",
+  "pce_fqdn": "someFullyQualifiedDomainName",
+  "created_by": {
+    "user": {
+      "href": "/users/1",
+      "username": "someUser@someDomain"
+    }
+  },
+  "event_type": "user.sign_in",
+  "status": "success",
+  "severity": "info",
+  "action": {
+    "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "api_endpoint": "/login/users/sign_in",
+    "api_method": "POST",
+    "http_status_code": 302,
+    "src_ip": "xxx.xxx.xx.x"
+  },
+  "resource_changes": [
+    {
+      "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "resource": {
+REST APIs 25.2.10 and 25.2.20
+404
+
+--- Page 405 ---
+        "user": {
+          "href": "/users/1",
+          "type": "local",
+          "username": "someUser@someDomain"
+        }
+      },
+      "changes": {
+        "sign_in_count": {
+          "before": 4,
+          "after": 5
+        }
+      },
+      "change_type": "update"
+    }
+  ],
+  "notifications": [
+    {
+      "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "notification_type": "user.login_session_created",
+      "info": {
+        "user": {
+          "href": "/users/1",
+          "type": "local",
+          "username": "someUser@someDomain"
+        }
+      }
+    }
+  ]
+},
+{
+  "href": "/orgs/1/events/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "timestamp": "2019-06-25T23:34:15.147Z",
+  "pce_fqdn": "someFullyQualifiedDomainName",
+  "created_by": {
+    "user": {
+      "href": "/users/1",
+      "username": "someUser@someDomain"
+    }
+  },
+  "event_type": "user.login",
+  "status": "success",
+  "severity": "info",
+  "action": {
+    "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "api_endpoint": "/api/v2/users/login",
+    "api_method": "GET",
+    "http_status_code": 200,
+    "src_ip": "xxx.xxx.xx.x"
+  },
+  "resource_changes": [
+ 
+  ],
+  "notifications": [
+    {
+      "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+REST APIs 25.2.10 and 25.2.20
+405
+
+--- Page 406 ---
+      "notification_type": "user.pce_session_created",
+      "info": {
+        "user": {
+          "href": "/users/1",
+          "username": "someUser@someDomain"
+        }
+      }
+    }
+  ]
+}
+]
+User Logged Out (JSON)
+[
+{
+  "href": "/orgs/1/events/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "timestamp": "2019-06-25T23:35:16.636Z",
+  "pce_fqdn": "someFullyQualifiedDomainName",
+  "created_by": {
+    "user": {
+      "href": "/users/1",
+      "username": "someUser@someDomain"
+    }
+  },
+  "event_type": "user.sign_out",
+  "status": "success",
+  "severity": "info",
+  "action": {
+    "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "api_endpoint": "/login/logout",
+    "api_method": "GET",
+    "http_status_code": 302,
+    "src_ip": "xxx.xxx.xx.x"
+  },
+  "resource_changes": [
+ 
+  ],
+  "notifications": [
+    {
+      "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "notification_type": "user.login_session_terminated",
+      "info": {
+        "reason": "user_logout",
+        "user": {
+          "href": "/users/1",
+          "username": "someUser@someDomain"
+        }
+      }
+    }
+  ]
+},
+{
+  "href": "/orgs/1/events/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "timestamp": "2019-06-25T23:35:16.636Z",
+  "pce_fqdn": "someFullyQualifiedDomainName",
+REST APIs 25.2.10 and 25.2.20
+406
+
+--- Page 407 ---
+  "created_by": {
+    "user": {
+      "href": "/users/1",
+      "username": "someUser@someDomain"
+    }
+  },
+  "event_type": "user.sign_out",
+  "status": "success",
+  "severity": "info",
+  "action": {
+    "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "api_endpoint": "/login/logout",
+    "api_method": "GET",
+    "http_status_code": 302,
+    "src_ip": "xxx.xxx.xx.x"
+  },
+  "resource_changes": [
+ 
+  ],
+  "notifications": [
+    {
+      "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "notification_type": "user.login_session_terminated",
+      "info": {
+        "reason": "user_logout",
+        "user": {
+          "href": "/users/1",
+          "username": "someUser@someDomain"
+        }
+      }
+    }
+  ]
+}
+]
+Login Failed — Incorrect Username (JSON)
+{
+  "href": "/orgs/1/events/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "timestamp": "2019-06-25T23:35:41.560Z",
+  "pce_fqdn": "someFullyQualifiedDomainName",
+  "created_by": {
+    "system": {
+    }
+  },
+  "event_type": "user.sign_in",
+  "status": "failure",
+  "severity": "info",
+  "action": {
+    "uuid": "someFullyQualifiedDomainName",
+    "api_endpoint": "/login/users/sign_in",
+    "api_method": "POST",
+    "http_status_code": 200,
+    "src_ip": "xxx.xxx.xx.x"
+  },
+  "resource_changes": [
+REST APIs 25.2.10 and 25.2.20
+407
+
+--- Page 408 ---
+ 
+  ],
+  "notifications": [
+    {
+      "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "notification_type": "user.login_failed",
+      "info": {
+        "associated_user": {
+          "supplied_username": "invalid_username@someDomain"
+        }
+      }
+    }
+  ]
+}
+Login Failed — Incorrect Password (JSON)
+{
+  "href": "/orgs/1/events/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "timestamp": "2019-06-25T23:35:27.649Z",
+  "pce_fqdn": "someFullyQualifiedDomainName",
+  "created_by": {
+    "system": {
+    }
+  },
+  "event_type": "user.sign_in",
+  "status": "failure",
+  "severity": "info",
+  "action": {
+    "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "api_endpoint": "/login/users/sign_in",
+    "api_method": "POST",
+    "http_status_code": 200,
+    "src_ip": "xxx.xxx.xx.x"
+  },
+  "resource_changes": [
+ 
+  ],
+  "notifications": [
+    {
+      "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "notification_type": "user.login_failed",
+      "info": {
+        "associated_user": {
+          "supplied_username": "someUser@someDomain"
+        }
+      }
+    }
+  ]
+}
+User Log Out (CEF)
+This example of an event record in CEF shows a successful user log out.
+CEF:0|Illumio|PCE|19.3.0|user.logout.success|User Logout Success|1|rt=Mar 
+06 2020 
+REST APIs 25.2.10 and 25.2.20
+408
+
+--- Page 410 ---
+{"before":"unknown","after":"up"},
+"network":{"before":null,"after":{"href":"/orgs/7/networks/xx"}},
+"network_detection_mode":{"before":null,"after":"single_private_brn"}}}]}},
+"change_type":"update"}] notifications=[] event_href=/orgs/7/events/someUUID
+Differences from Previous Releases
+The following table indicates which event names changed in the Illumio Core 18.2 release. If
+you are upgrading from a release prior to 18.2, be sure to use the current event name in your
+alert monitoring system.
+Changed VEN Event Names
+This table lists the names of VEN-related events prior to the Illumio Core 18.2 release and the
+names they were changed to in the 18.2 release.
+Old Name Prior to 18.2 New Name as of 18.2
+fw_config_change agent.firewall_config
+activation_success
+activation_failure
+agent.activate
+deactivation_success
+deactivation_failure
+agent.deactivate
+Events Monitoring Best Practices
+The Illumio Core generates a rich stream of structured messages that provide the following
+information:
+• Illumio PCE system health
+• Illumio PCE notable activity
+• Illumio VEN notable activity
+Illumio Core events are structured and actionable. Using the event data, you can identify the
+severity, affected  systems, and what triggered the event. Illumio Core sends the structured
+messages using the syslog protocol to remote systems, such as Splunk and QRadar. You can
+set up your remote systems to automatically process the messages and alert you.
+Monitoring Operational Practices
+In addition to setting up an automated system, Illumio recommends implementing the follow-
+ing operational practices:
+1. Determine the normal quantity of events from the Illumio Core and monitor the trend for
+changes; investigate spikes or reductions in the event generation rate.
+2. Implement good operational practices to troubleshoot and investigate alerts and to re-
+cover from events.
+REST APIs 25.2.10 and 25.2.20
+410
+
+--- Page 419 ---
+• Software: Illumio App for CMDB
+• Documentation: Illumio App for ServiceNow 2.1.0
+Syslog Forwarding
+The PCE can export logs to syslog. You can also use the PCE's own internal syslog configura-
+tion.
+Identify Events in Syslog Stream
+Event records from the syslog stream are identified  by the following string:
+"version":2  
+AND
+'"href":\s*"/orgs/[0-9]*/events'  OR  '"href":\s*"/system_events/'
+Forward Events to External Syslog Server
+The PCE has an internal syslog repository, “Local,” where all the events are stored. You can
+control and configure  the relaying of Syslog messages from the PCE to multiple external
+Syslog servers.
+To configure  forwarding to an external Syslog server:
+1. From the PCE web console menu, choose Settings > Event Settings.
+2. Click Add.
+The Event Settings - Add Event Forwarding page opens.
+3. Click Add Repository.
+REST APIs 25.2.10 and 25.2.20
+419
+
+--- Page 430 ---
+Property Description Type Re-
+quired
+Possible
+Values
+This value exists only if the protocol is not TCP (6) or UDP
+(17).
+Maxi-
+mum=6553
+5
+pd This is the Policy decision value, which indicates if the
+flow  was allowed, potentially blocked (but allowed),
+blocked, or unknown.
+Possible values:
+• 0 – Allowed traffic
+• 1 – Allowed traffic  but will be blocked after policy en-
+forcement
+• 2 – Blocked traffic
+• 3 - Unknown
+NOTE
+Policy decision is “unknown” in the
+following cases:
+• Flows uploaded using exist-
+ing bulk API (/orgs/<org_id>/
+agents/bulk_traffic_flows).
+• Flows uploaded using Network
+Flow Ingest Application (/orgs/
+<org_id>/traffic_data).
+• T raffic  reported by idle VENs, spe-
+cifically  those reported with “s”
+state (snapshot).
+Inte-
+ger
+Yes Mini-
+mum=0
+Maxi-
+mum=3
+count Count of the number of flows  in the flow  summary. Inte-
+ger
+Yes
+state The session state for the traffic  flows  is in the flow  sum-
+maries.
+Possible values:
+• Active (A): The connection was still open when the flow
+summary was logged. This applies to allowed and po-
+tentially blocked flows.
+• Closed (C): (Linux only) The connection was closed
+when the flow  summary was logged. Applies to allowed
+and potentially blocked flows.
+• Timed out (T): The Connection timed out when the
+flow  summary was logged. Applies to allowed and po-
+tentially blocked flows.  Due to a limitation of WFP, a
+Windows VEN will report "T" even when the connection
+is closed when the flow  summary was logged.
+• Snapshot (S): Snapshot of current connections to and
+from the VEN, which applies only to workloads whose
+policy state is set to Idle. Applies to allowed and poten-
+tially blocked flows.
+• New connection (N): Dropped TCP packet contains
+a SYN associated with a new connection. Applies to
+blocked TCP flows.  The value is empty for blocked UDP
+flows.
+String No A, C, T, S, N
+REST APIs 25.2.10 and 25.2.20
+430
+

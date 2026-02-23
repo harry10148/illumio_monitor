@@ -7,45 +7,45 @@ from src import __version__
 
 FULL_EVENT_CATALOG = {
     "Agent Health": {
-        "system_task.agent_missed_heartbeats_check": "遺失心跳",
-        "system_task.agent_offline_check": "Agent 離線",
-        "lost_agent.found": "重新發現遺失 Agent",
-        "agent.service_not_available": "Agent 服務不可用",
-        "agent.goodbye": "Agent Goodbye"
+        "system_task.agent_missed_heartbeats_check": "event_agent_missed_heartbeats",
+        "system_task.agent_offline_check": "event_agent_offline",
+        "lost_agent.found": "event_lost_agent_found",
+        "agent.service_not_available": "event_service_not_available",
+        "agent.goodbye": "event_agent_goodbye"
     },
     "Agent Security": {
-        "agent.tampering": "Agent 遭到竄改",
-        "agent.suspend": "Agent 被暫停",
-        "agent.clone_detected": "偵測到複製 Agent",
-        "agent.activate": "Agent 已配對",
-        "agent.deactivate": "Agent 取消配對"
+        "agent.tampering": "event_agent_tampering",
+        "agent.suspend": "event_agent_suspend",
+        "agent.clone_detected": "event_agent_clone_detected",
+        "agent.activate": "event_agent_activate",
+        "agent.deactivate": "event_agent_deactivate"
     },
     "User Access": {
-        "user.login_failed": "登入失敗",
-        "user.sign_in": "使用者登入",
-        "user.csrf_validation_failed": "CSRF 驗證失敗"
+        "user.login_failed": "event_user_login_failed",
+        "user.sign_in": "event_user_sign_in",
+        "user.csrf_validation_failed": "event_csrf_failed"
     },
     "Auth & API": {
-        "request.authentication_failed": "API 認證失敗",
-        "request.authorization_failed": "API 授權失敗",
-        "api_key.create": "建立 API Key",
-        "api_key.delete": "刪除 API Key"
+        "request.authentication_failed": "event_api_auth_failed",
+        "request.authorization_failed": "event_api_authz_failed",
+        "api_key.create": "event_api_key_create",
+        "api_key.delete": "event_api_key_delete"
     },
     "Policy": {
-        "rule_set.delete": "刪除規則集",
-        "rule_set.create": "建立規則集",
-        "rule_set.update": "更新規則集",
-        "sec_rule.create": "建立規則",
-        "sec_rule.delete": "刪除規則",
-        "sec_policy.create": "政策派送 (Provisioning)"
+        "rule_set.delete": "event_ruleset_delete",
+        "rule_set.create": "event_ruleset_create",
+        "rule_set.update": "event_ruleset_update",
+        "sec_rule.create": "event_rule_create",
+        "sec_rule.delete": "event_rule_delete",
+        "sec_policy.create": "event_policy_prov"
     },
     "Workloads": {
-        "workload.create": "建立工作負載",
-        "workload.delete": "刪除工作負載"
+        "workload.create": "event_workload_create",
+        "workload.delete": "event_workload_delete"
     },
     "System": {
-        "pce.application_started": "PCE 啟動",
-        "cluster.update": "叢集更新"
+        "pce.application_started": "event_pce_start",
+        "cluster.update": "event_cluster_update"
     }
 }
 
@@ -74,7 +74,7 @@ def add_event_menu(cm: ConfigManager, edit_rule=None):
         evts = FULL_EVENT_CATALOG[cat]
         evt_keys = list(evts.keys())
         print(f"\n--- {cat} ---")
-        for i, k in enumerate(evt_keys): print(f"{i+1}. {k} ({evts[k]})")
+        for i, k in enumerate(evt_keys): print(f"{i+1}. {k} ({t(evts[k])})")
         print(t('menu_cancel'))
         if edit_rule and edit_rule.get('filter_value') in evt_keys:
             def_idx = evt_keys.index(edit_rule['filter_value']) + 1
@@ -84,7 +84,7 @@ def add_event_menu(cm: ConfigManager, edit_rule=None):
             
         if not ei or ei == 0: continue
         k = evt_keys[ei-1]
-        print(f"\n已選擇: {k}")
+        print(f"\n{t('selected')}: {k}")
         print(f"{t('rule_trigger_type_1')}  {t('rule_trigger_type_2')}  {t('menu_cancel')}")
         
         def_ti = 2 if edit_rule and edit_rule.get('threshold_type') == 'count' else 1
@@ -106,8 +106,8 @@ def add_event_menu(cm: ConfigManager, edit_rule=None):
         
         cm.add_or_update_rule({
             "id": rid,
-            "type": "event", "name": evts[k], "filter_key": "event_type", "filter_value": k,
-            "desc": evts[k], "rec": "Check Logs", "threshold_type": ttype, "threshold_count": cnt, 
+            "type": "event", "name": t(evts[k]), "filter_key": "event_type", "filter_value": k,
+            "desc": t(evts[k]), "rec": "Check Logs", "threshold_type": ttype, "threshold_count": cnt, 
             "threshold_window": win, "cooldown_minutes": cd
         })
         input(t('rule_saved'))
@@ -493,15 +493,15 @@ def settings_menu(cm: ConfigManager):
                 cm.save()
         elif sel == 4:
             c = cm.config.get('smtp', {})
-            print(f"\n{Colors.CYAN}=== SMTP 設定 ==={Colors.ENDC}")
+            print(f"\n{Colors.CYAN}{t('setup_smtp')}{Colors.ENDC}")
             c['host'] = safe_input(f"SMTP Host [{c.get('host','localhost')}]", str, allow_cancel=True) or c.get('host','localhost')
             c['port'] = safe_input(f"SMTP Port [{c.get('port', 25)}]", int, allow_cancel=True) or c.get('port', 25)
             
-            enable_tls = safe_input(f"啟用 STARTTLS (Y/N/Enter)? [{c.get('enable_tls', False)}]", str, allow_cancel=True)
+            enable_tls = safe_input(t('enable_starttls', status=c.get('enable_tls', False)), str, allow_cancel=True)
             if enable_tls and enable_tls.lower() == 'y': c['enable_tls'] = True
             elif enable_tls and enable_tls.lower() == 'n': c['enable_tls'] = False
             
-            enable_auth = safe_input(f"啟用驗證 (Y/N/Enter)? [{c.get('enable_auth', False)}]", str, allow_cancel=True)
+            enable_auth = safe_input(t('enable_auth', status=c.get('enable_auth', False)), str, allow_cancel=True)
             if enable_auth and enable_auth.lower() == 'y': c['enable_auth'] = True
             elif enable_auth and enable_auth.lower() == 'n': c['enable_auth'] = False
             

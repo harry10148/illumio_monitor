@@ -23,19 +23,17 @@ logger = logging.getLogger(__name__)
 
 # ─── Daemon / Monitor Loop ───────────────────────────────────────────────────
 
-_shutdown_requested = False
+import threading
 
+_shutdown_event = threading.Event()
 
 def _signal_handler(signum, frame):
-    global _shutdown_requested
-    _shutdown_requested = True
     logger.info(f"Received signal {signum}. Shutting down gracefully...")
-
+    _shutdown_event.set()
 
 def run_daemon_loop(interval_minutes: int):
     """Headless monitoring loop. Runs analysis at fixed intervals until stopped."""
-    global _shutdown_requested
-    _shutdown_requested = False
+    _shutdown_event.clear()
 
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
@@ -45,7 +43,7 @@ def run_daemon_loop(interval_minutes: int):
     print(f"Illumio PCE Monitor — daemon mode (interval={interval_minutes}m)")
     print("Press Ctrl+C or send SIGTERM to stop.")
 
-    while not _shutdown_requested:
+    while not _shutdown_event.is_set():
         try:
             logger.info("=== Starting monitoring cycle ===")
             api = ApiClient(cm)
@@ -57,12 +55,9 @@ def run_daemon_loop(interval_minutes: int):
         except Exception as e:
             logger.error(f"Error in monitoring cycle: {e}", exc_info=True)
 
-        # Sleep in small increments so we can respond to shutdown quickly
+        # Sleep efficiently until interval is up, or interrupted by shutdown
         sleep_seconds = interval_minutes * 60
-        for _ in range(sleep_seconds):
-            if _shutdown_requested:
-                break
-            time.sleep(1)
+        _shutdown_event.wait(timeout=sleep_seconds)
 
     logger.info("Daemon loop stopped.")
     print("\nDaemon stopped.")
