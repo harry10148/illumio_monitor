@@ -167,6 +167,15 @@ def _create_app(cm: ConfigManager) -> 'Flask':
             "cooldowns": cooldowns
         })
 
+    @app.route('/api/init_quarantine', methods=['POST'])
+    def api_init_quarantine():
+        """Ensure Quarantine labels exist on the PCE upon loading the new UI module."""
+        cm.load()
+        from src.api_client import ApiClient
+        api = ApiClient(cm)
+        api.check_and_create_quarantine_labels()
+        return jsonify({"ok": True})
+
     # ─── API: Event Catalog ───────────────────────────────────────────────
     @app.route('/api/event-catalog')
     def api_event_catalog():
@@ -465,131 +474,255 @@ def _create_app(cm: ConfigManager) -> 'Flask':
                 return jsonify({"ok": True})
         return jsonify({"error": "not found"}), 404
 
-    @app.route('/api/dashboard/top10', methods=['POST'])
-    def api_dashboard_top10():
+    # ─── API: Traffic & Quarantine ─────────────────────────────────────────
+    @app.route('/api/quarantine/search', methods=['POST'])
+    def api_quarantine_search():
         d = request.json or {}
-        mins = int(d.get('mins', 30))
-
-        pd_sel = int(d.get('pd_sel', 3))
-        rank_by = d.get('rank_by', 'count')
-        
         try:
             from src.api_client import ApiClient
             from src.analyzer import Analyzer
             from src.reporter import Reporter
+            import datetime
+
             api = ApiClient(cm)
-            ana = Analyzer(cm, api, Reporter(cm))
+            base_ana = Analyzer(cm, api, Reporter(cm))
 
-            pds = ["blocked", "potentially_blocked", "allowed"]
-            if pd_sel == 2:
-                pds = ["blocked"]
-            elif pd_sel == 1:
-                pds = ["potentially_blocked"]
-            elif pd_sel == 0:
-                pds = ["allowed"]
-
-            now = datetime.datetime.now(datetime.timezone.utc)
-            start_dt = now - datetime.timedelta(minutes=mins)
+            mins = int(d.get("mins", 30))
+            now = datetime.datetime.utcnow()
+            start_time = (now - datetime.timedelta(minutes=mins)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            end_time = now.strftime("%Y-%m-%dT%H:%M:%SZ")
             
-            traffic_gen = api.execute_traffic_query_stream(
-                start_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                now.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                pds
-            )
-            traffic = list(traffic_gen) if traffic_gen else []
+            pd_val = str(d.get("policy_decision", "3"))
+            if pd_val == "1": pds = ["potentially_blocked"]
+            elif pd_val == "2": pds = ["blocked"]
+            elif pd_val == "0": pds = ["allowed"]
+            else: pds = ["blocked", "potentially_blocked", "allowed"]
+
+            # Map the inbound payload to the analyzer's query
+            params = {
+                "start_time": start_time,
+                "end_time": end_time,
+                "policy_decisions": pds,
+                "sort_by": d.get("sort_by", "bandwidth"),
+                "search": d.get("search", ""),
+                "src_label": d.get("src_label", ""),
+                "src_ip_in": d.get("src_ip_in", ""),
+                "dst_label": d.get("dst_label", ""),
+                "dst_ip_in": d.get("dst_ip_in", ""),
+                "ex_src_label": d.get("ex_src_label", ""),
+                "ex_src_ip": d.get("ex_src_ip", ""),
+                "ex_dst_label": d.get("ex_dst_label", ""),
+                "ex_dst_ip": d.get("ex_dst_ip", ""),
+                "port": d.get("port", ""),
+                "ex_port": d.get("ex_port", ""),
+                "proto": d.get("proto", "")
+            }
+            results = base_ana.query_flows(params)
             
-            aggr = {}
-            for f in traffic:
-                # Apply advanced filter matching if query provides filters
-                if not ana.check_flow_match(d, f, start_dt):
-                    continue
-                    
-                key = ana.get_traffic_details_key(f)
-                pd = f.get('pd')
-                if pd is None:
-                    raw_dec = str(f.get("policy_decision", "")).lower()
-                    if "blocked" in raw_dec and "potentially" not in raw_dec: pd = 2
-                    elif "potentially" in raw_dec: pd = 1
-                    elif "allowed" in raw_dec: pd = 0
-                    else: pd = -1
-                else:
-                    pd = int(pd)
-
-                if key not in aggr:
-                    # Capture rich attributes
-                    raw_src_name = "-"
-                    raw_src_wl = f.get('src', {}).get('workload', {})
-                    raw_src_labels = raw_src_wl.get('labels', []) if raw_src_wl else []
-                    if raw_src_wl:
-                        raw_src_name = raw_src_wl.get('name') or raw_src_wl.get('hostname') or "-"
-                    raw_src_ip = f.get('src', {}).get('ip', "-")
-                    
-                    raw_dst_name = "-"
-                    raw_dst_wl = f.get('dst', {}).get('workload', {})
-                    raw_dst_labels = raw_dst_wl.get('labels', []) if raw_dst_wl else []
-                    if raw_dst_wl:
-                        raw_dst_name = raw_dst_wl.get('name') or raw_dst_wl.get('hostname') or "-"
-                    raw_dst_ip = f.get('dst', {}).get('ip', "-")
-                    
-                    svc = f.get('service', {})
-                    sport = f.get('dst_port') or svc.get('port') or '-'
-                    sproto = f.get('proto') or svc.get('proto') or '-'
-                    if sproto == 6: sproto_str = "TCP"
-                    elif sproto == 17: sproto_str = "UDP"
-                    else: sproto_str = str(sproto)
-                    
-                    direction = "-"
-                    fd = f.get('flow_direction')
-                    if fd == 'inbound': direction = "IN"
-                    elif fd == 'outbound': direction = "OUT"
-                    
-                    ts_r = f.get('timestamp_range', {})
-                    t_first = ts_r.get('first_detected', f.get('timestamp','-')).replace('T',' ').split('.')[0]
-                    t_last = ts_r.get('last_detected', '-').replace('T',' ').split('.')[0]
+            for r in results:
+                flow_pd = r.get("policy_decision", "")
+                if flow_pd == "allowed": r["pd"] = 0
+                elif flow_pd == "potentially_blocked": r["pd"] = 1
+                else: r["pd"] = 2
                 
-                    aggr[key] = {
-                        'key': key, 'pd': pd, 'count': 0, 'volume': 0.0, 'bandwidth': 0.0, 'val_fmt': '',
-                        'first_seen': t_first, 'last_seen': t_last, 'dir': direction,
-                        's_name': raw_src_name, 's_ip': raw_src_ip, 's_labels': raw_src_labels,
-                        'd_name': raw_dst_name, 'd_ip': raw_dst_ip, 'd_labels': raw_dst_labels,
-                        'svc': f"{sport} / {sproto_str}"
-                    }
-                else:
-                    # Update timestamps if seen later/earlier
-                    ts_r = f.get('timestamp_range', {})
-                    curr_last = ts_r.get('last_detected', '-').replace('T',' ').split('.')[0]
-                    if curr_last > aggr[key]['last_seen']:
-                        aggr[key]['last_seen'] = curr_last
-                
-                if rank_by == 'bandwidth':
-                    bw, note, _, _ = ana.calculate_mbps(f)
-                    if bw > aggr[key]['bandwidth']:
-                        aggr[key]['bandwidth'] = bw
-                        from src.utils import format_unit
-                        aggr[key]['val_fmt'] = f"{format_unit(bw, 'bandwidth')} {note}"
-                elif rank_by == 'volume':
-                    vol, note = ana.calculate_volume_mb(f)
-                    aggr[key]['volume'] += vol
-                else:
-                    c = int(f.get("num_connections") or f.get("count", 1))
-                    aggr[key]['count'] += c
-
-            result = list(aggr.values())
-            if rank_by == 'bandwidth':
-                result.sort(key=lambda x: x['bandwidth'], reverse=True)
-            elif rank_by == 'volume':
-                result.sort(key=lambda x: x['volume'], reverse=True)
-                from src.utils import format_unit
-                for r in result:
-                    r['val_fmt'] = format_unit(r['volume'], 'volume')
-            else:
-                result.sort(key=lambda x: x['count'], reverse=True)
-                for r in result:
-                    r['val_fmt'] = str(r['count'])
-
-            top10 = result[:10]
-            return jsonify({"ok": True, "data": top10, "total": len(traffic)})
+            return jsonify({"ok": True, "data": results})
         except Exception as e:
+            logger.error(f"Quarantine Search Error: {e}", exc_info=True)
+            return jsonify({"ok": False, "error": str(e)})
+
+    @app.route('/api/dashboard/top10', methods=['POST'])
+    def api_dashboard_top10():
+        d = request.json or {}
+        try:
+            from src.api_client import ApiClient
+            from src.analyzer import Analyzer
+            from src.reporter import Reporter
+            import datetime
+
+            api = ApiClient(cm)
+            base_ana = Analyzer(cm, api, Reporter(cm))
+
+            mins = int(d.get("mins", 30))
+            now = datetime.datetime.utcnow()
+            start_time = (now - datetime.timedelta(minutes=mins)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            end_time = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+            
+            pd_val = int(d.get("pd", 3))
+            if pd_val == 1: pds = ["potentially_blocked"]
+            elif pd_val == 2: pds = ["blocked"]
+            elif pd_val == 0: pds = ["allowed"]
+            else: pds = ["blocked", "potentially_blocked", "allowed"]
+
+            rank_by = d.get("rank_by", "bandwidth")
+            
+            # Map the inbound payload to the analyzer's query
+            params = {
+                "start_time": start_time,
+                "end_time": end_time,
+                "policy_decisions": pds,
+                "sort_by": rank_by,
+                "search": d.get("search", ""),
+                "src_ip_in": d.get("src_ip_in"), "dst_ip_in": d.get("dst_ip_in"),
+                "src_label": d.get("src_label"), "dst_label": d.get("dst_label"),
+                "ex_src_ip": d.get("ex_src_ip"), "ex_dst_ip": d.get("ex_dst_ip"),
+                "ex_src_label": d.get("ex_src_label"), "ex_dst_label": d.get("ex_dst_label"),
+                "port": d.get("port"), "ex_port": d.get("ex_port"),
+                "proto": d.get("proto")
+            }
+            results = base_ana.query_flows(params)
+
+            # Sort and get top 10
+            if rank_by == "bandwidth":
+                sorted_v = sorted(results, key=lambda x: x.get("max_bandwidth_mbps", 0), reverse=True)
+            elif rank_by == "volume":
+                sorted_v = sorted(results, key=lambda x: x.get("total_volume_mb", 0), reverse=True)
+            else: # count
+                sorted_v = sorted(results, key=lambda x: x.get("total_connections", 0), reverse=True)
+            
+            top10 = []
+            for item in sorted_v[:10]:
+                s = item.get('source', {})
+                dst = item.get('destination', {})
+                sv = item.get('service', {})
+                
+                s_name = s.get('name', 'N/A')
+                d_name = dst.get('name', 'N/A')
+                port = sv.get('port', 'All')
+                proto_name = sv.get('proto', '')
+                svc_str = f"{proto_name}/{port}"
+                
+                # Policy Decision mapping for UI
+                flow_pd = item.get("policy_decision", "")
+                if flow_pd == "allowed": pd_int = 0
+                elif flow_pd == "potentially_blocked": pd_int = 1
+                else: pd_int = 2 # default to Blocked if unknown or explicitly blocked
+                
+                if rank_by == "bandwidth": val_fmt = f"{item.get('max_bandwidth_mbps', 0):.2f} Mbps"
+                elif rank_by == "volume": val_fmt = f"{item.get('total_volume_mb', 0):.2f} MB"
+                else: val_fmt = f"{item.get('total_connections', 0)}"
+                
+                first_seen = item.get("first_seen", "")
+                if first_seen: first_seen = first_seen[:19].replace('T', ' ')
+                last_seen = item.get("last_seen", "")
+                if last_seen: last_seen = last_seen[:19].replace('T', ' ')
+                
+                top10.append({
+                    "val_fmt": val_fmt,
+                    "first_seen": first_seen,
+                    "last_seen": last_seen,
+                    "dir": "→",
+                    "s_name": s_name,
+                    "s_ip": s.get('ip', ''),
+                    "s_href": s.get('href', ''),
+                    "d_name": d_name,
+                    "d_ip": dst.get('ip', ''),
+                    "d_href": dst.get('href', ''),
+                    "svc": svc_str,
+                    "pd": pd_int,
+                    "s_labels": s.get('labels', []),
+                    "d_labels": dst.get('labels', [])
+                })
+                
+            return jsonify({"ok": True, "data": top10, "total": len(sorted_v)})
+        except Exception as e:
+            logger.error(f"Top 10 Query Error: {e}", exc_info=True)
+            return jsonify({"ok": False, "error": str(e)})
+
+    @app.route('/api/workloads', methods=['GET', 'POST'])
+    def api_search_workloads():
+        if request.method == 'POST':
+            d = request.json or {}
+        else:
+            d = request.args.to_dict()
+        try:
+            from src.api_client import ApiClient
+            api = ApiClient(cm)
+            
+            # API query parameters mapping
+            params = {}
+            if "name" in d and d["name"]: params["name"] = d["name"]
+            if "hostname" in d and d["hostname"]: params["hostname"] = d["hostname"]
+            if "ip_address" in d and d["ip_address"]: params["ip_address"] = d["ip_address"]
+            if "max_results" in d: params["max_results"] = d["max_results"]
+            else: params["max_results"] = 500
+
+            workloads = api.search_workloads(params)
+            return jsonify({"ok": True, "data": workloads})
+        except Exception as e:
+            logger.error(f"Search Workload Error: {e}", exc_info=True)
+            return jsonify({"ok": False, "error": str(e)})
+
+    @app.route('/api/quarantine/apply', methods=['POST'])
+    def api_quarantine_apply():
+        d = request.json or {}
+        href = d.get('href')
+        level = d.get('level')  # Mild, Moderate, Severe
+        try:
+            from src.api_client import ApiClient
+            api = ApiClient(cm)
+            
+            # 1. Fetch labels to get target Href
+            q_hrefs = api.check_and_create_quarantine_labels()
+            target_label_href = q_hrefs.get(level)
+            if not target_label_href:
+                return jsonify({"ok": False, "error": f"Failed to retrieve label for {level}"})
+
+            # 2. Fetch Workload's current labels
+            wl = api.get_workload(href)
+            if not wl:
+                return jsonify({"ok": False, "error": "Workload not found"})
+
+            # 3. Filter out existing Quarantine labels and append the new one
+            current_labels = wl.get("labels", [])
+            new_labels = [l for l in current_labels if l.get("href") not in q_hrefs.values()]
+            new_labels.append({"href": target_label_href})
+
+            # 4. Commit
+            success = api.update_workload_labels(href, new_labels)
+            if success:
+                return jsonify({"ok": True, "level": level})
+            else:
+                return jsonify({"ok": False, "error": "API failed to update workload"})
+        except Exception as e:
+            logger.error(f"Quarantine Apply Error: {e}")
+            return jsonify({"ok": False, "error": str(e)})
+
+    @app.route('/api/quarantine/bulk_apply', methods=['POST'])
+    def api_quarantine_bulk_apply():
+        d = request.json or {}
+        hrefs = d.get('hrefs', [])
+        level = d.get('level')
+        try:
+            from src.api_client import ApiClient
+            api = ApiClient(cm)
+            q_hrefs = api.check_and_create_quarantine_labels()
+            target_label_href = q_hrefs.get(level)
+
+            results = {"success": 0, "failed": []}
+            import concurrent.futures
+
+            def process_wl(href):
+                wl = api.get_workload(href)
+                if not wl: return href, False
+                current_labels = wl.get("labels", [])
+                new_labels = [l for l in current_labels if l.get("href") not in q_hrefs.values()]
+                new_labels.append({"href": target_label_href})
+                return href, api.update_workload_labels(href, new_labels)
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
+                futures = {ex.submit(process_wl, h): h for h in hrefs}
+                for f in concurrent.futures.as_completed(futures):
+                    h, ok = f.result()
+                    if ok:
+                        results["success"] = int(results["success"]) + 1
+                    else:
+                        failed_list = results["failed"]
+                        if isinstance(failed_list, list):
+                            failed_list.append(h)
+
+            return jsonify({"ok": True, "results": results})
+        except Exception as e:
+            logger.error(f"Bulk Quarantine Error: {e}")
             return jsonify({"ok": False, "error": str(e)})
 
     # ─── API: Actions ─────────────────────────────────────────────────────

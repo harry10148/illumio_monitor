@@ -6,7 +6,9 @@ import base64
 import logging
 import urllib.request
 import urllib.error
+import urllib.parse
 from io import BytesIO
+from src.utils import Colors
 from src.utils import Colors
 
 logger = logging.getLogger(__name__)
@@ -223,3 +225,92 @@ class ApiClient:
             logger.error(f"Query Exception: {e}")
             print(f"Query Exception: {e}")
             return
+
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # Quarantine Feature: Labels and Workloads
+    # ═══════════════════════════════════════════════════════════════════════════════
+
+    def get_labels(self, key: str) -> list:
+        try:
+            params = urllib.parse.urlencode({"key": key})
+            url = f"{self.base_url}/labels?{params}"
+            status, body = self._request(url, timeout=10)
+            if status != 200:
+                logger.error(f"Get Labels Failed: {status}")
+                return []
+            return json.loads(body)
+        except Exception as e:
+            logger.error(f"Fetch Labels Error: {e}")
+            return []
+
+    def create_label(self, key: str, value: str) -> dict:
+        try:
+            url = f"{self.base_url}/labels"
+            payload = {"key": key, "value": value}
+            status, body = self._request(url, method="POST", data=payload, timeout=10)
+            if status == 201:
+                return json.loads(body)
+            logger.error(f"Create Label Failed: {status} - {body.decode(errors='replace')}")
+            return {}
+        except Exception as e:
+            logger.error(f"Create Label Error: {e}")
+            return {}
+
+    def check_and_create_quarantine_labels(self):
+        """Ensure Quarantine labels (Mild, Moderate, Severe) exist in the PCE. Returns list of their hrefs."""
+        existing_labels = self.get_labels("Quarantine")
+        existing_values = {lbl.get("value"): lbl.get("href") for lbl in existing_labels if lbl.get("value")}
+        
+        target_levels = ["Mild", "Moderate", "Severe"]
+        label_hrefs = {}
+        for level in target_levels:
+            if level in existing_values:
+                label_hrefs[level] = existing_values[level]
+            else:
+                logger.info(f"Creating missing Quarantine label: {level}")
+                new_lbl = self.create_label("Quarantine", level)
+                if new_lbl and "href" in new_lbl:
+                    label_hrefs[level] = new_lbl["href"]
+        return label_hrefs
+
+    def get_workload(self, href: str) -> dict:
+        """Fetch a specific workload by its href"""
+        try:
+            # href usually looks like /orgs/1/workloads/xx-yy-zz
+            url = f"{self.api_cfg['url']}/api/v2{href}"
+            status, body = self._request(url, timeout=10)
+            if status == 200:
+                return json.loads(body)
+            logger.error(f"Get Workload Failed: {status} for {href}")
+            return {}
+        except Exception as e:
+            logger.error(f"Get Workload Error: {e}")
+            return {}
+
+    def update_workload_labels(self, href: str, labels: list) -> bool:
+        """Update a workload's labels. labels list should contain dicts with 'href' keys."""
+        try:
+            url = f"{self.api_cfg['url']}/api/v2{href}"
+            payload = {"labels": labels}
+            status, body = self._request(url, method="PUT", data=payload, timeout=10)
+            if status == 204:
+                return True
+            logger.error(f"Update Workload Labels Failed: {status} - {body.decode(errors='replace')}")
+            return False
+        except Exception as e:
+            logger.error(f"Update Workload Labels Error: {e}")
+            return False
+
+    def search_workloads(self, params: dict) -> list:
+        """Search workloads matching query params (e.g., name, hostname, ip_address, labels)"""
+        try:
+            query_str = urllib.parse.urlencode(params, doseq=True)
+            url = f"{self.base_url}/workloads?{query_str}"
+            status, body = self._request(url, timeout=15)
+            if status == 200:
+                return json.loads(body)
+            logger.error(f"Search Workloads Failed: {status}")
+            return []
+        except Exception as e:
+            logger.error(f"Search Workloads Error: {e}")
+            return []

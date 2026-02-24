@@ -86,6 +86,8 @@ class Analyzer:
         ddms = float(flow.get("ddms") or 0)
 
         if delta_bytes > 0 and ddms > 0:
+            if ddms < 1000:
+                ddms = 1000.0
             val = (delta_bytes * 8.0) / (ddms / 1000.0) / 1000000.0
             return val, "(Interval)", delta_bytes, ddms
 
@@ -407,6 +409,135 @@ class Analyzer:
         if rule.get('port'):
             crit.append(f"Port:{rule['port']}")
         return ", ".join(crit)
+
+    def query_flows(self, params: dict):
+        """
+        Generic traffic flow query utilizing identical metrics logic to run_debug_mode.
+        params schema:
+        {
+          "start_time": "2026-02-23T00:00:00Z",
+          "end_time": "2026-02-23T23:59:59Z",
+          "policy_decisions": ["blocked", "allowed"],
+          "sort_by": "bandwidth", # bandwidth, volume, connections
+          "search": "192.168.1.1" # optional text filter
+        }
+        """
+        start_time = params.get("start_time")
+        end_time = params.get("end_time")
+        pds = params.get("policy_decisions", ["blocked", "potentially_blocked", "allowed"])
+        
+        strict_pd: set[str] = set()
+        for p in pds:
+            if p == "potentially_blocked": strict_pd.add("potentially_blocked")
+            elif p == "blocked": strict_pd.add("blocked")
+            elif p == "allowed": strict_pd.add("allowed")
+        
+        traffic_stream = self.api.execute_traffic_query_stream(start_time, end_time, pds)
+        if not traffic_stream:
+            return []
+
+        search_query = params.get("search", "").lower()
+
+        rule = {
+            "type": "bandwidth",
+            "pd": -1,
+            "port": params.get("port"), "proto": params.get("proto"),
+            "src_label": params.get("src_label"), "dst_label": params.get("dst_label"),
+            "src_ip_in": params.get("src_ip_in"), "dst_ip_in": params.get("dst_ip_in"),
+            "ex_port": params.get("ex_port"),
+            "ex_src_label": params.get("ex_src_label"), "ex_dst_label": params.get("ex_dst_label"),
+            "ex_src_ip": params.get("ex_src_ip"), "ex_dst_ip": params.get("ex_dst_ip")
+        }
+
+        now_dt = datetime.datetime.now(datetime.timezone.utc)
+        try:
+            start_dt = datetime.datetime.strptime(start_time, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc)
+        except:
+            start_dt = now_dt - datetime.timedelta(minutes=30)
+            
+        matches = []
+        sort_by = params.get("sort_by", "bandwidth")
+        rule["type"] = sort_by if sort_by in ["bandwidth", "volume"] else "connections"
+
+        for f in traffic_stream:
+            if strict_pd and f.get("policy_decision") not in strict_pd:
+                continue
+
+            if not self.check_flow_match(rule, f, start_dt):
+                continue
+                
+            src = f.get('src', {})
+            dst = f.get('dst', {})
+            svc = f.get('service', {})
+
+            s_name = src.get('workload', {}).get('name') or src.get('ip', 'N/A')
+            d_name = dst.get('workload', {}).get('name') or dst.get('ip', 'N/A')
+            port = svc.get('port', 'All') or f.get('dst_port', 'All')
+
+            if search_query:
+                s_ip = str(src.get('ip', '')).lower()
+                d_ip = str(dst.get('ip', '')).lower()
+                if search_query not in s_name.lower() and search_query not in d_name.lower() \
+                    and search_query not in s_ip and search_query not in d_ip \
+                    and search_query != str(port):
+                    continue
+
+            f_copy = f.copy()
+            
+            # Format Protocol Name
+            proto = f.get('proto') or svc.get('proto', '')
+            try:
+                p_int = int(proto)
+                if p_int == 6: proto = "TCP"
+                elif p_int == 17: proto = "UDP"
+                elif p_int == 1: proto = "ICMP"
+            except: pass
+
+            f_copy['source'] = {
+                "name": s_name,
+                "ip": src.get('ip'),
+                "href": src.get('workload', {}).get('href'),
+                "labels": src.get('workload', {}).get('labels', [])
+            }
+            f_copy['destination'] = {
+                "name": d_name,
+                "ip": dst.get('ip'),
+                "href": dst.get('workload', {}).get('href'),
+                "labels": dst.get('workload', {}).get('labels', [])
+            }
+            f_copy['service'] = {
+                "port": port,
+                "proto": proto
+            }
+
+            bw_val, bw_note, _, _ = self.calculate_mbps(f)
+            vol_val, vol_note = self.calculate_volume_mb(f)
+            conn_val = int(f.get("num_connections") or f.get("count", 1))
+
+            if rule["type"] == "bandwidth":
+                f_copy['_metric_val'] = bw_val
+            elif rule["type"] == "volume":
+                f_copy['_metric_val'] = vol_val
+            else:
+                f_copy['_metric_val'] = conn_val
+                
+            f_copy["max_bandwidth_mbps"] = bw_val
+            f_copy["total_volume_mb"] = vol_val
+            f_copy["total_connections"] = conn_val
+            
+            f_copy["formatted_bandwidth"] = f"{format_unit(bw_val, 'bandwidth')} {bw_note}".strip()
+            f_copy["formatted_volume"] = f"{format_unit(vol_val, 'volume')} {vol_note}".strip()
+            f_copy["formatted_connections"] = f"{conn_val}"
+            
+            ts = f.get('timestamp_range', {})
+            f_copy["first_seen"] = ts.get('first_detected')
+            f_copy["last_seen"] = ts.get('last_detected')
+            f_copy["policy_decision"] = f.get("policy_decision")
+
+            matches.append(f_copy)
+
+        matches.sort(key=lambda x: x.get('_metric_val', 0), reverse=True)
+        return matches[:100]
 
     def run_debug_mode(self, mins=None, pd_sel=None):
         print(f"\n{Colors.HEADER}{t('menu_debug_mode_title')}{Colors.ENDC}")
