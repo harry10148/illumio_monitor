@@ -25,6 +25,7 @@
       --shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
       --header-font: 'EB Garamond', serif;
       --body-font: 'Lato', system-ui, sans-serif;
+      color-scheme: dark light;
     }
 
     [data-theme="light"] {
@@ -60,7 +61,7 @@
     a {
       color: var(--accent2);
       text-decoration: none;
-      transition: color 0.15s;
+      transition: color 0.15s ease;
     }
 
     a:hover {
@@ -117,7 +118,7 @@
       color: var(--dim);
       font-weight: 600;
       font-size: .95rem;
-      transition: background-color 0.2s, color 0.2s;
+      transition: background-color 0.2s ease, color 0.2s ease;
       border: 1px solid transparent;
       border-bottom: none;
       display: flex;
@@ -179,7 +180,7 @@
       border-radius: var(--radius);
       padding: 20px;
       text-align: center;
-      transition: transform 0.2s, box-shadow 0.2s;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
     }
 
     .card:hover {
@@ -224,7 +225,7 @@
       font-family: var(--body-font);
       font-weight: 600;
       cursor: pointer;
-      transition: all .2s;
+      transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
 
@@ -320,14 +321,20 @@
       padding: 10px 14px;
       border-radius: 6px;
       font-size: .95rem;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
 
-    .form-group input:focus,
-    .form-group select:focus {
-      outline: none;
+    .form-group input:focus-visible,
+    .form-group select:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
       border-color: var(--accent);
-      box-shadow: 0 0 0 1px var(--accent);
+      box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1);
+    }
+
+    .form-group input:focus:not(:focus-visible),
+    .form-group select:focus:not(:focus-visible) {
+      outline: none;
     }
 
     .form-row {
@@ -413,7 +420,7 @@
       cursor: col-resize;
       user-select: none;
       z-index: 2;
-      transition: background 0.2s;
+      transition: background-color 0.2s ease, opacity 0.2s ease;
       background: var(--dim);
       border-radius: 2px;
       opacity: 0;
@@ -583,6 +590,10 @@
       transform: scale(1);
     }
 
+    .modal {
+      overscroll-behavior: contain;
+    }
+
     .modal h2 {
       font-size: 1.3rem;
       color: var(--accent2);
@@ -683,7 +694,7 @@
       z-index: 200;
       opacity: 0;
       transform: translateY(20px);
-      transition: all .3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       pointer-events: none;
       box-shadow: var(--shadow);
     }
@@ -718,7 +729,7 @@
       font-size: 0.9rem;
       font-weight: 600;
       cursor: pointer;
-      transition: 0.2s;
+      transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
       display: flex;
       align-items: center;
       gap: 6px;
@@ -763,7 +774,7 @@
       align-items: center;
       gap: 20px;
       z-index: 50;
-      transition: bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      transition: bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
       pointer-events: none;
     }
 
@@ -862,13 +873,18 @@
       font-size: 1rem;
       font-weight: 600;
       cursor: pointer;
-      transition: 0.2s;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
 
-    .severity-select:focus {
+    .severity-select:focus-visible {
       border-color: var(--danger);
+      outline: 2px solid var(--danger);
+      outline-offset: 1px;
+      box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1);
+    }
+
+    .severity-select:focus:not(:focus-visible) {
       outline: none;
-      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
     }
 
     .severity-select option[value="Mild"] {
@@ -945,7 +961,7 @@
     <div style="display:flex;align-items:center;gap:16px">
       <span class="meta" id="hdr-meta">Loading...</span>
       <button class="btn btn-secondary btn-sm" onclick="stopGui()" title="Stop Web GUI" data-i18n="gui_stop">
-        <svg class="icon">
+        <svg class="icon" aria-hidden="true" focusable="false">
           <use href="#icon-stop"></use>
         </svg> Stop
       </button>
@@ -1033,8 +1049,8 @@
           </div>
           <div class="form-group" style="margin-bottom:0;">
             <label data-i18n="gui_filter_details">Filter Details</label>
-            <input id="qt-search" placeholder="Quick Search String..." style="width: 150px;"
-              data-i18n="gui_quick_search_placeholder">
+            <input id="qt-search" name="traffic-search" autocomplete="off" spellcheck="false"
+              placeholder="Quick Search String…" style="width: 150px;" data-i18n="gui_quick_search_placeholder">
           </div>
           <div class="form-group" style="margin-bottom:0;">
             <label data-i18n="gui_sort_by">Sort By</label>
@@ -1076,7 +1092,7 @@
                 <th data-i18n="gui_source_identity">Source Identity</th>
                 <th data-i18n="gui_destination_identity">Destination Identity</th>
                 <th style="width:90px" data-i18n="gui_service_port">Service</th>
-                <th style="width:80px" data-i18n="gui_policy_dec">Policy D...</th>
+                <th style="width:80px" data-i18n="gui_policy_dec">Policy Decision</th>
                 <th style="width:80px" data-i18n="gui_actions">Actions</th>
               </tr>
             </thead>
@@ -1113,15 +1129,18 @@
         <div class="toolbar">
           <div class="form-group" style="margin-bottom:0; flex:1;">
             <label data-i18n="gui_workload_name">Workload Name</label>
-            <input id="qw-name" placeholder="Exact or partial name">
+            <input id="qw-name" name="workload-name" autocomplete="workload-name" spellcheck="false"
+              placeholder="Exact or partial name">
           </div>
           <div class="form-group" style="margin-bottom:0; flex:1;">
             <label data-i18n="gui_ip_address">IP Address</label>
-            <input id="qw-ip" placeholder="e.g. 10.0.0.5">
+            <input id="qw-ip" name="workload-ip" autocomplete="workload-ip" spellcheck="false"
+              placeholder="e.g. 10.0.0.5">
           </div>
           <div class="form-group" style="margin-bottom:0; flex:1;">
             <label data-i18n="gui_hostname">Hostname</label>
-            <input id="qw-host" placeholder="Hostname match">
+            <input id="qw-host" name="workload-hostname" autocomplete="workload-hostname" spellcheck="false"
+              placeholder="Hostname match">
           </div>
           <button class="btn btn-primary" onclick="runWorkloadSearch()" style="height: 42px; align-self:flex-end;">
             <svg class="icon">
@@ -1448,7 +1467,7 @@
       <h2><span data-i18n="gui_add_event_rule" id="me-title">Add Event Rule</span></h2>
       <div class="form-group"><label data-i18n="gui_category">Category</label><select id="ev-cat"
           onchange="populateEvents()">
-          <option value="" data-i18n="gui_select">Select...</option>
+          <option value="" data-i18n="gui_select">Select…</option>
         </select></div>
       <div class="form-group"><label data-i18n="gui_event_type">Event Type</label><select id="ev-type">
           <option value="" data-i18n="gui_select_first">Select category first</option>
@@ -1791,6 +1810,10 @@
       await loadDashboardQueries();
       setInterval(loadStatus, 30000);
       hideAll();
+    }
+
+    function hideAll() {
+      // Helper to close popovers when clicking outside
     }
 
     async function loadTranslations() {
