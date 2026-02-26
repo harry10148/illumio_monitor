@@ -164,6 +164,7 @@ def _create_app(cm: ConfigManager) -> 'Flask':
             "health_check": cm.config['settings'].get('enable_health_check', True),
             "language": cm.config.get('settings', {}).get('language', 'en'),
             "theme": cm.config.get('settings', {}).get('theme', 'dark'),
+            "timezone": cm.config.get('settings', {}).get('timezone', 'local'),
             "cooldowns": cooldowns
         })
 
@@ -589,7 +590,10 @@ def _create_app(cm: ConfigManager) -> 'Flask':
                 d_name = dst.get('name', 'N/A')
                 port = sv.get('port', 'All')
                 proto_name = sv.get('proto', '')
+                svc_name = sv.get('name') or getattr(sv, 'name', '') or ''
                 svc_str = f"{proto_name}/{port}"
+                if svc_name:
+                    svc_str = f"{svc_name} {svc_str}"
                 
                 # Policy Decision mapping for UI
                 flow_pd = item.get("policy_decision", "")
@@ -602,9 +606,7 @@ def _create_app(cm: ConfigManager) -> 'Flask':
                 else: val_fmt = f"{item.get('total_connections', 0)}"
                 
                 first_seen = item.get("first_seen", "")
-                if first_seen: first_seen = first_seen[:19].replace('T', ' ')
                 last_seen = item.get("last_seen", "")
-                if last_seen: last_seen = last_seen[:19].replace('T', ' ')
                 
                 top10.append({
                     "val_fmt": val_fmt,
@@ -614,13 +616,17 @@ def _create_app(cm: ConfigManager) -> 'Flask':
                     "s_name": s_name,
                     "s_ip": s.get('ip', ''),
                     "s_href": s.get('href', ''),
+                    "s_process": s.get('process', ''),
+                    "s_user": s.get('user', ''),
+                    "s_labels": s.get('labels', []),
                     "d_name": d_name,
                     "d_ip": dst.get('ip', ''),
                     "d_href": dst.get('href', ''),
+                    "d_process": dst.get('process', ''),
+                    "d_user": dst.get('user', ''),
+                    "d_labels": dst.get('labels', []),
                     "svc": svc_str,
-                    "pd": pd_int,
-                    "s_labels": s.get('labels', []),
-                    "d_labels": dst.get('labels', [])
+                    "pd": pd_int
                 })
                 
             return jsonify({"ok": True, "data": top10, "total": len(sorted_v)})
@@ -674,7 +680,7 @@ def _create_app(cm: ConfigManager) -> 'Flask':
 
             # 3. Filter out existing Quarantine labels and append the new one
             current_labels = wl.get("labels", [])
-            new_labels = [l for l in current_labels if l.get("href") not in q_hrefs.values()]
+            new_labels = [{"href": l.get("href")} for l in current_labels if l.get("href") not in q_hrefs.values()]
             new_labels.append({"href": target_label_href})
 
             # 4. Commit
@@ -705,7 +711,7 @@ def _create_app(cm: ConfigManager) -> 'Flask':
                 wl = api.get_workload(href)
                 if not wl: return href, False
                 current_labels = wl.get("labels", [])
-                new_labels = [l for l in current_labels if l.get("href") not in q_hrefs.values()]
+                new_labels = [{"href": l.get("href")} for l in current_labels if l.get("href") not in q_hrefs.values()]
                 new_labels.append({"href": target_label_href})
                 return href, api.update_workload_labels(href, new_labels)
 

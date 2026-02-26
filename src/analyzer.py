@@ -119,6 +119,9 @@ class Analyzer:
         # Dynamic Sliding Window Check
         if start_time_limit:
             ts_str = f.get("timestamp")
+            if not ts_str and "timestamp_range" in f:
+                ts_str = f["timestamp_range"].get("last_detected") or f["timestamp_range"].get("first_detected")
+                
             if ts_str:
                 try:
                     f_time = datetime.datetime.strptime(ts_str, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=datetime.timezone.utc)
@@ -474,12 +477,31 @@ class Analyzer:
             d_name = dst.get('workload', {}).get('name') or dst.get('ip', 'N/A')
             port = svc.get('port', 'All') or f.get('dst_port', 'All')
 
+            # Detailed Attribution
+            s_proc = (src.get('process_name') or "").lower()
+            s_user = (src.get('user_name') or "").lower()
+            d_proc = (dst.get('process_name') or svc.get('process_name') or "").lower()
+            d_user = (dst.get('user_name') or svc.get('user_name') or "").lower()
+            svc_name = (svc.get("name") or "").lower()
+
             if search_query:
                 s_ip = str(src.get('ip', '')).lower()
                 d_ip = str(dst.get('ip', '')).lower()
-                if search_query not in s_name.lower() and search_query not in d_name.lower() \
-                    and search_query not in s_ip and search_query not in d_ip \
-                    and search_query != str(port):
+                
+                matches_search = (
+                    search_query in s_name.lower() or 
+                    search_query in d_name.lower() or
+                    search_query in s_ip or 
+                    search_query in d_ip or
+                    search_query == str(port).lower() or
+                    search_query in s_proc or
+                    search_query in s_user or
+                    search_query in d_proc or
+                    search_query in d_user or
+                    search_query in svc_name
+                )
+                
+                if not matches_search:
                     continue
 
             f_copy = f.copy()
@@ -497,17 +519,22 @@ class Analyzer:
                 "name": s_name,
                 "ip": src.get('ip'),
                 "href": src.get('workload', {}).get('href'),
-                "labels": src.get('workload', {}).get('labels', [])
+                "labels": src.get('workload', {}).get('labels', []),
+                "process": src.get('process_name') or "",
+                "user": src.get('user_name') or ""
             }
             f_copy['destination'] = {
                 "name": d_name,
                 "ip": dst.get('ip'),
                 "href": dst.get('workload', {}).get('href'),
-                "labels": dst.get('workload', {}).get('labels', [])
+                "labels": dst.get('workload', {}).get('labels', []),
+                "process": dst.get('process_name') or svc.get('process_name') or "",
+                "user": dst.get('user_name') or svc.get('user_name') or ""
             }
             f_copy['service'] = {
                 "port": port,
-                "proto": proto
+                "proto": proto,
+                "name": svc.get("name") or getattr(svc, 'name', '') or f.get("sn") or ""
             }
 
             bw_val, bw_note, _, _ = self.calculate_mbps(f)
@@ -537,7 +564,7 @@ class Analyzer:
             matches.append(f_copy)
 
         matches.sort(key=lambda x: x.get('_metric_val', 0), reverse=True)
-        return matches[:100]
+        return matches[:500]
 
     def run_debug_mode(self, mins=None, pd_sel=None):
         print(f"\n{Colors.HEADER}{t('menu_debug_mode_title')}{Colors.ENDC}")

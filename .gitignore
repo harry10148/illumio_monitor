@@ -22,3 +22,10 @@ venv/
 .idea/
 *.swp
 *.swo
+
+# OS files
+.DS_Store
+
+# Temporary files from investigation
+find_api.py
+grep_out.txt

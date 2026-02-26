@@ -489,6 +489,55 @@
       line-height: 1.5;
     }
 
+    /* Cell Popover (for truncated text) */
+    .cell-popover {
+      position: absolute;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      z-index: 9999;
+      min-width: 200px;
+      max-width: 350px;
+      font-family: var(--body-font);
+      color: var(--fg);
+      animation: fadeInModal 0.15s ease-out;
+    }
+
+    .cell-popover h4 {
+      margin: 0 0 12px 0;
+      color: var(--accent);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+
+    .cell-popover ul {
+      margin: 0;
+      padding: 0;
+      list-style-type: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .cell-popover ul li {
+      font-size: 0.9rem;
+      position: relative;
+      padding-left: 14px;
+      color: var(--fg);
+    }
+
+    .cell-popover ul li::before {
+      content: "•";
+      position: absolute;
+      left: 0;
+      color: var(--dim);
+    }
+
     /* Modal */
     .modal-bg {
       display: none;
@@ -954,38 +1003,41 @@
       <button class="sub-nav-btn active" onclick="switchQTab('traffic')" id="qbtn-traffic">
         <svg class="icon">
           <use href="#icon-activity"></use>
-        </svg> Traffic Analyzer
+        </svg> <span data-i18n="gui_traffic_analyzer">Traffic Analyzer</span>
       </button>
       <button class="sub-nav-btn" onclick="switchQTab('workloads')" id="qbtn-workloads">
         <svg class="icon">
           <use href="#icon-search"></use>
-        </svg> Workloads Search
+        </svg> <span data-i18n="gui_workload_search">Workload Search</span>
       </button>
       <button class="sub-nav-btn" onclick="switchQTab('legacy')" id="qbtn-legacy"
         style="margin-left:auto; opacity: 0.7;">
-        Top 10 Widgets
+        <span data-i18n="gui_top10_widgets">Top 10 Widgets</span>
       </button>
     </div>
 
     <!-- Traffic Analyzer Panel -->
     <div id="q-panel-traffic" class="q-panel active">
       <fieldset>
-        <legend>Traffic Analysis Query</legend>
+        <legend data-i18n="gui_ta_query">Traffic Analysis Query</legend>
         <div class="toolbar">
           <div class="form-group" style="margin-bottom:0;">
-            <label>Window</label>
+            <label data-i18n="gui_window">Window</label>
             <select id="qt-mins" style="width:120px;">
-              <option value="15">Last 15m</option>
-              <option value="60" selected>Last 1 hr</option>
-              <option value="1440">Last 24 hr</option>
+              <option value="15" data-i18n="gui_win_15m">Last 15m</option>
+              <option value="60" selected data-i18n="gui_win_1h">Last 1 hr</option>
+              <option value="1440" data-i18n="gui_win_24h">Last 24 hr</option>
+              <option value="10080" data-i18n="gui_win_1w">Last 1 Week</option>
+              <option value="43200" data-i18n="gui_win_1m">Last 1 Month</option>
             </select>
           </div>
           <div class="form-group" style="margin-bottom:0;">
-            <label>Filter Details</label>
-            <input id="qt-search" placeholder="Quick Search String..." style="width: 150px;">
+            <label data-i18n="gui_filter_details">Filter Details</label>
+            <input id="qt-search" placeholder="Quick Search String..." style="width: 150px;"
+              data-i18n="gui_quick_search_placeholder">
           </div>
           <div class="form-group" style="margin-bottom:0;">
-            <label>Sort By</label>
+            <label data-i18n="gui_sort_by">Sort By</label>
             <select id="qt-sort" style="width:140px;">
               <option value="bandwidth">Max Bandwidth</option>
               <option value="volume">Total Volume</option>
@@ -998,12 +1050,18 @@
             title="Advanced Filters">
             <svg class="icon">
               <use href="#icon-settings"></use>
-            </svg> Filter Settings
+            </svg> <span data-i18n="gui_filter_settings">Filter Settings</span>
+          </button>
+          <button class="btn btn-secondary" onclick="openQtGuideModal()" style="height: 42px; align-self:flex-end;"
+            title="Parameter Guide">
+            <svg class="icon">
+              <use href="#icon-help-circle"></use>
+            </svg> <span data-i18n="gui_param_guide">Guide</span>
           </button>
           <button class="btn btn-primary" onclick="runTrafficAnalyzer()" style="height: 42px; align-self:flex-end;">
             <svg class="icon">
               <use href="#icon-search"></use>
-            </svg> Query Flow
+            </svg> <span data-i18n="gui_query_flow">Query Flow</span>
           </button>
         </div>
 
@@ -1011,22 +1069,39 @@
           <table class="rule-table">
             <thead>
               <tr>
-                <th style="width:50px"><input type="checkbox" id="qt-chkall" onchange="toggleQChecks('qt-chk')"></th>
-                <th style="width:120px">Metric</th>
-                <th>Source Identity</th>
-                <th>Destination Identity</th>
-                <th style="width:120px">Service</th>
-                <th style="width:110px">Policy Decision</th>
-                <th style="width:140px">Actions</th>
+                <th style="width:30px;text-align:center;"><input type="checkbox" id="qt-chkall"
+                    onchange="toggleQChecks('qt-chk')"></th>
+                <th style="width:120px" data-i18n="gui_metric">Metric</th>
+                <th style="width:110px" data-i18n="gui_first_last_seen">First/Last Seen</th>
+                <th data-i18n="gui_source_identity">Source Identity</th>
+                <th data-i18n="gui_destination_identity">Destination Identity</th>
+                <th style="width:90px" data-i18n="gui_service_port">Service</th>
+                <th style="width:80px" data-i18n="gui_policy_dec">Policy D...</th>
+                <th style="width:80px" data-i18n="gui_actions">Actions</th>
               </tr>
             </thead>
             <tbody id="qt-body">
               <tr>
-                <td colspan="7" style="text-align:center;padding:40px;color:var(--dim);">Run a query to view real-time
+                <td colspan="8" style="text-align:center;padding:40px;color:var(--dim);">Run a query to view real-time
                   traffic anomalies.</td>
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <div class="pagination-bar" id="qt-pagination"
+          style="display:none; margin-top:12px; align-items:center; gap:12px;">
+          <div style="font-size:12px; color:var(--dim);" id="qt-total-count"></div>
+          <div style="flex:1"></div>
+          <label style="font-size:12px;" data-i18n="gui_page_size">Page Size</label>
+          <select id="qt-page-size" style="width:70px; padding:4px; font-size:12px; height:28px;"
+            onchange="_qt_page=1; renderQtPage();">
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <button class="btn btn-sm btn-secondary" onclick="qtPrevPage()" data-i18n="gui_prev">Prev</button>
+          <span id="qt-page-num" style="font-size:12px; font-weight:bold;">1</span>
+          <button class="btn btn-sm btn-secondary" onclick="qtNextPage()" data-i18n="gui_next">Next</button>
         </div>
       </fieldset>
     </div>
@@ -1034,24 +1109,24 @@
     <!-- Workloads Search Panel -->
     <div id="q-panel-workloads" class="q-panel">
       <fieldset>
-        <legend>Advanced Workload Search</legend>
+        <legend data-i18n="gui_ws_search">Advanced Workload Search</legend>
         <div class="toolbar">
           <div class="form-group" style="margin-bottom:0; flex:1;">
-            <label>Workload Name</label>
+            <label data-i18n="gui_workload_name">Workload Name</label>
             <input id="qw-name" placeholder="Exact or partial name">
           </div>
           <div class="form-group" style="margin-bottom:0; flex:1;">
-            <label>IP Address</label>
+            <label data-i18n="gui_ip_address">IP Address</label>
             <input id="qw-ip" placeholder="e.g. 10.0.0.5">
           </div>
           <div class="form-group" style="margin-bottom:0; flex:1;">
-            <label>Hostname</label>
+            <label data-i18n="gui_hostname">Hostname</label>
             <input id="qw-host" placeholder="Hostname match">
           </div>
           <button class="btn btn-primary" onclick="runWorkloadSearch()" style="height: 42px; align-self:flex-end;">
             <svg class="icon">
               <use href="#icon-search"></use>
-            </svg> Find
+            </svg> <span data-i18n="gui_find">Find</span>
           </button>
         </div>
 
@@ -1060,20 +1135,36 @@
             <thead>
               <tr>
                 <th style="width:50px"><input type="checkbox" id="qw-chkall" onchange="toggleQChecks('qw-chk')"></th>
-                <th style="width:180px">Status / Name</th>
-                <th style="width:100px">Management</th>
-                <th style="width:150px">IP & Interface</th>
-                <th>Active Labels</th>
-                <th style="width:140px">Actions</th>
+                <th style="width:180px" data-i18n="gui_ws_col_status">Status / Name</th>
+                <th style="width:100px" data-i18n="gui_ws_col_management">Management</th>
+                <th style="width:150px" data-i18n="gui_ws_col_ip">IP & Interface</th>
+                <th data-i18n="gui_ws_col_labels">Active Labels</th>
+                <th style="width:140px" data-i18n="gui_actions">Actions</th>
               </tr>
             </thead>
             <tbody id="qw-body">
               <tr>
-                <td colspan="6" style="text-align:center;padding:40px;color:var(--dim);">Search by IP or Name to find
+                <td colspan="6" style="text-align:center;padding:40px;color:var(--dim);" data-i18n="gui_ws_empty">Search
+                  by IP or Name to find
                   workloads in the PCE.</td>
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <div class="pagination-bar" id="qw-pagination"
+          style="display:none; margin-top:12px; align-items:center; gap:12px;">
+          <div style="font-size:12px; color:var(--dim);" id="qw-total-count"></div>
+          <div class="spacer"></div>
+          <label style="font-size:12px;" data-i18n="gui_page_size">Page Size</label>
+          <select id="qw-page-size" style="width:70px; padding:4px; font-size:12px; height:28px;"
+            onchange="_qw_page=1; renderQwPage();">
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <button class="btn btn-sm btn-secondary" onclick="qwPrevPage()" data-i18n="gui_prev">Prev</button>
+          <span id="qw-page-num" style="font-size:12px; font-weight:bold;">1</span>
+          <button class="btn btn-sm btn-secondary" onclick="qwNextPage()" data-i18n="gui_next">Next</button>
         </div>
       </fieldset>
     </div>
@@ -1539,6 +1630,43 @@
     </div>
   </div>
 
+  <!-- Traffic Analyzer Parameter Guide Modal -->
+  <div class="modal-bg" id="modal-qt-guide">
+    <div class="modal" style="max-width:700px;">
+      <h2><span data-i18n="gui_ta_guide_title">Traffic Analyzer Parameter Guide</span></h2>
+      <div style="color:var(--dim); line-height:1.6; font-size:0.95rem; max-height:60vh; overflow-y:auto;">
+        <p style="color:var(--fg); font-weight:bold; margin-bottom:12px;" data-i18n="gui_ta_guide_desc">Use 'Filter
+          Details' to search for process names, users, or workload names.</p>
+
+        <h3 style="color:var(--accent2); margin-top:15px; border-bottom:1px solid var(--border); padding-bottom:5px;"
+          data-i18n="gui_ta_guide_sec_search">Filter Details / Quick Search</h3>
+        <p data-i18n="gui_ta_guide_search_desc">This field performs real-time matching on the returned results (supports
+          top 500 records), matching:</p>
+        <ul style="padding-left:20px; margin-bottom:12px;">
+          <li data-i18n="gui_ta_guide_li_proc">Process Name (Process): e.g. sshd, nginx, java</li>
+          <li data-i18n="gui_ta_guide_li_user">User Name (User): e.g. root, www-data, system</li>
+          <li data-i18n="gui_ta_guide_li_svc">Service Name (Service): e.g. HTTPS, MySQL</li>
+          <li data-i18n="gui_ta_guide_li_wn">Workload Name: e.g. web-server-01</li>
+          <li data-i18n="gui_ta_guide_li_ip">IP Address: e.g. 10.0.0.1</li>
+          <li data-i18n="gui_ta_guide_li_port">Port: e.g. 443</li>
+        </ul>
+
+        <h3 style="color:var(--accent2); margin-top:15px; border-bottom:1px solid var(--border); padding-bottom:5px;"
+          data-i18n="gui_ta_guide_sec_adv">Advanced Filter Settings</h3>
+        <p data-i18n="gui_ta_guide_adv_desc">These parameters are sent directly to the Illumio API for server-side
+          filtering:</p>
+        <ul style="padding-left:20px; margin-bottom:12px;">
+          <li data-i18n="gui_ta_guide_li_labels">Labels: Use Key=Value format, e.g. role=Web</li>
+          <li data-i18n="gui_ta_guide_li_excludes">Excludes: Exclude specific ports, labels, or IP ranges</li>
+          <li data-i18n="gui_ta_guide_li_pd">Policy Decision: Filter by decisions (Blocked, Allowed, etc.)</li>
+        </ul>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="closeModal('modal-qt-guide')" data-i18n="gui_cancel">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
@@ -1551,7 +1679,119 @@
     const rv = name => document.querySelector(`input[name="${name}"]:checked`)?.value;
     const setRv = (name, val) => { const r = document.querySelector(`input[name="${name}"][value="${val}"]`); if (r) r.checked = true };
     let _editIdx = null; // null = add mode, number = edit mode
+    let _dashboardQueries = [];
+
     let _translations = {};
+    let _timezone = 'local';
+
+    function formatDateZ(utcString) {
+      if (!utcString) return "";
+      let d = new Date(utcString);
+      if (isNaN(d.getTime())) {
+        if (!utcString.endsWith('Z')) {
+          d = new Date(utcString + 'Z');
+        }
+      }
+      if (isNaN(d.getTime())) return utcString;
+
+      let targetDate = d;
+      if (_timezone !== 'local' && _timezone.startsWith('UTC')) {
+        let offsetStr = _timezone.replace('UTC', '');
+        let offsetHours = parseFloat(offsetStr) || 0;
+        let ms = d.getTime() + (offsetHours * 3600000);
+        targetDate = new Date(ms);
+        const pad = n => n.toString().padStart(2, '0');
+        return `${targetDate.getUTCFullYear()}-${pad(targetDate.getUTCMonth() + 1)}-${pad(targetDate.getUTCDate())} ${pad(targetDate.getUTCHours())}:${pad(targetDate.getUTCMinutes())}:${pad(targetDate.getUTCSeconds())}`;
+      } else {
+        const pad = n => n.toString().padStart(2, '0');
+        return `${targetDate.getFullYear()}-${pad(targetDate.getMonth() + 1)}-${pad(targetDate.getDate())} ${pad(targetDate.getHours())}:${pad(targetDate.getMinutes())}:${pad(targetDate.getSeconds())}`;
+      }
+    }
+
+    let _labelDimensions = {
+      'role': { bg: '#ce93d8', fg: '#ffffff' },
+      'app': { bg: '#42a5f5', fg: '#ffffff' },
+      'env': { bg: '#26a69a', fg: '#ffffff' },
+      'loc': { bg: '#857ad6', fg: '#ffffff' }
+    };
+
+    function sortLabels(labels) {
+      if (!labels || !labels.length) return [];
+      const order = { 'role': 1, 'app': 2, 'env': 3, 'loc': 4 };
+      return labels.slice().sort((a, b) => {
+        const keyA = a.key.toLowerCase();
+        const keyB = b.key.toLowerCase();
+        const rankA = order[keyA] || 99;
+        const rankB = order[keyB] || 99;
+        if (rankA !== rankB) return rankA - rankB;
+        return keyA.localeCompare(keyB);
+      });
+    }
+
+    function renderLabelsHtml(labels) {
+      if (!labels || !labels.length) return '';
+      return sortLabels(labels).map(l => {
+        const cMap = _labelDimensions[l.key] || { bg: '#e1ecf4', fg: '#2c5e77' };
+        const cssDef = `background:${cMap.bg};color:${cMap.fg};padding:1px 4px;border-radius:4px;font-size:9px;margin-right:2px;display:inline-block;white-space:nowrap;margin-top:2px;`;
+        let classStr = 'lbl';
+        if (l.key === 'Quarantine') classStr += ' lbl-quarantine';
+        return `<span class="${classStr}" style="${cssDef}">${escapeHtml(l.key)}:${escapeHtml(l.value)}</span>`;
+      }).join('');
+    }
+
+    let _activePopover = null;
+
+    function showCellPopover(event, title, items) {
+      event.stopPropagation();
+      if (_activePopover) {
+        _activePopover.remove();
+        _activePopover = null;
+      }
+
+      const pop = document.createElement('div');
+      pop.className = 'cell-popover';
+
+      let html = `<h4>${escapeHtml(title)} (${items.length} ITEMS)</h4><ul>`;
+      items.forEach(it => { html += `<li>${escapeHtml(it)}</li>`; });
+      html += '</ul>';
+
+      pop.innerHTML = html;
+      document.body.appendChild(pop);
+
+      const rect = event.currentTarget.getBoundingClientRect();
+      const popRect = pop.getBoundingClientRect();
+
+      let top = rect.bottom + window.scrollY + 5;
+      let left = rect.left + window.scrollX;
+
+      // Ensure it doesn't go off screen
+      if (left + popRect.width > window.innerWidth) {
+        left = window.innerWidth - popRect.width - 20;
+      }
+      if (top + popRect.height > window.innerHeight + window.scrollY) {
+        top = rect.top + window.scrollY - popRect.height - 5;
+      }
+
+      pop.style.top = top + 'px';
+      pop.style.left = left + 'px';
+
+      _activePopover = pop;
+    }
+
+    document.addEventListener('click', function (e) {
+      if (_activePopover && !_activePopover.contains(e.target)) {
+        _activePopover.remove();
+        _activePopover = null;
+      }
+    });
+
+    async function init() {
+      await loadTranslations();
+      await loadStatus();
+      await loadDashboardQueries();
+      setInterval(loadStatus, 30000);
+      hideAll();
+    }
 
     async function loadTranslations() {
       _translations = await api('/api/ui_translations');
@@ -1615,6 +1855,7 @@
       $('d-rules').textContent = d.rules_count;
       $('d-health').textContent = d.health_check ? 'ON' : 'OFF';
       $('d-lang').textContent = (d.language || 'en').toUpperCase();
+      if (d.timezone) _timezone = d.timezone;
       if (d.theme) document.documentElement.setAttribute('data-theme', d.theme);
 
       if (d.cooldowns && d.cooldowns.length > 0) {
@@ -1641,8 +1882,6 @@
       if (r.ok) { $('d-api').textContent = 'Connected'; $('d-api').className = 'value ok'; slog('✅ Connected (HTTP ' + r.status + ')') }
       else { $('d-api').textContent = 'Error'; $('d-api').className = 'value err'; slog('❌ ' + (r.error || r.body)) }
     }
-
-    let _dashboardQueries = [];
 
     async function loadDashboardQueries() {
       const rt = await window.fetch('/api/dashboard/queries');
@@ -1671,12 +1910,12 @@
           else if (q.pd === 1) badgeColor = "var(--warn)";
           else if (q.pd === 0) badgeColor = "var(--success)";
 
-          let rankLabel = q.rank_by === 'bandwidth' ? 'Max Bandwidth (Mbps)' : (q.rank_by === 'volume' ? 'Total Volume (MB)' : 'Connection Count');
+          let rankLabel = q.rank_by === 'bandwidth' ? (_translations['gui_rank_bw'] || 'Max Bandwidth (Mbps)') : (q.rank_by === 'volume' ? (_translations['gui_rank_vol'] || 'Total Volume (MB)') : (_translations['gui_rank_conn'] || 'Connection Count'));
           html += `
           <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;">
              <div style="display:flex;align-items:center;min-height:30px;">
                 <strong style="margin-right:12px;font-size:0.95rem;color:var(--accent2);">${escapeHtml(q.name)}</strong>
-                <span style="font-size:10px;background:${badgeColor};color:#fff;padding:2px 6px;border-radius:4px;margin-right:8px;">PD: ${q.pd === 3 ? 'All' : (q.pd === 2 ? 'Blocked' : (q.pd === 1 ? 'Potential' : 'Allowed'))}</span>
+                <span style="font-size:10px;background:${badgeColor};color:#fff;padding:2px 6px;border-radius:4px;margin-right:8px;">PD: ${q.pd === 3 ? (_translations['gui_pd_all'] || 'All') : (q.pd === 2 ? (_translations['gui_pd_blocked'] || 'Blocked') : (q.pd === 1 ? (_translations['gui_pd_potential'] || 'Potential') : (_translations['gui_pd_allowed'] || 'Allowed')))}</span>
                 <span style="font-size:10px;background:var(--dim);color:#fff;padding:2px 6px;border-radius:4px;margin-right:8px;">${rankLabel}</span>
                 <span style="flex:1"></span>
                 <span id="d-qstate-${i}" style="color:var(--dim);font-size:0.8rem;margin-right:12px;"></span>
@@ -1684,20 +1923,19 @@
                 <button class="btn btn-primary btn-sm" onclick="runTop10Query(${i})" data-i18n="gui_run_btn">Run</button>
              </div>
              
-             <table class="rule-table" style="margin-top:10px;border-top:1px solid var(--border);font-size:0.8rem;">
-              <thead><tr>
-                <th style="width:25px">#</th>
-                <th style="width:100px" data-i18n="gui_value">Value</th>
-                <th style="width:110px">First/Last Seen</th>
-                <th style="width:40px;text-align:center;">Dir</th>
-                <th>Source</th>
-                <th>Destination</th>
-                <th style="width:70px">Service</th>
-                <th style="width:70px" data-i18n="gui_policy_dec">Decision</th>
-                <th style="width:140px">Actions</th>
-              </tr></thead>
-              <tbody id="d-qbody-${i}">
-                <tr><td colspan="9" style="text-align:center;color:var(--dim);padding:20px;">${_translations['gui_top10_empty'] || 'No data. Click Run to query.'}</td></tr>
+              <table class="rule-table" style="margin-top:10px;border-top:1px solid var(--border);font-size:0.8rem;">
+               <thead><tr>
+                 <th style="width:25px">#</th>
+                 <th style="width:100px" data-i18n="gui_value">Value</th>
+                 <th style="width:110px">First/Last Seen</th>
+                 <th>Source</th>
+                 <th>Destination</th>
+                 <th style="width:70px">Service</th>
+                 <th style="width:70px" data-i18n="gui_policy_dec">Decision</th>
+                 <th style="width:140px">Actions</th>
+               </tr></thead>
+               <tbody id="d-qbody-${i}">
+                <tr><td colspan="8" style="text-align:center;color:var(--dim);padding:20px;">${_translations['gui_top10_empty'] || 'No data. Click Run to query.'}</td></tr>
               </tbody>
              </table>
           </div>`;
@@ -1817,16 +2055,12 @@
         if (r.data && r.data.length) {
           let html = '';
           r.data.forEach((m, i) => {
-            const pBadge = m.pd === 2 ? `<span style="background:var(--danger);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;">Blocked</span>` :
-              m.pd === 1 ? `<span style="background:var(--warn);color:#000;padding:2px 6px;border-radius:4px;font-size:10px;">Potential</span>` :
-                m.pd === 0 ? `<span style="background:var(--success);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;">Allowed</span>` : m.pd;
+            const pBadge = m.pd === 2 ? `<span style="background:var(--danger);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;">${_translations['gui_pd_blocked'] || 'Blocked'}</span>` :
+              m.pd === 1 ? `<span style="background:var(--warn);color:#000;padding:2px 6px;border-radius:4px;font-size:10px;">${_translations['gui_pd_potential'] || 'Potential'}</span>` :
+                m.pd === 0 ? `<span style="background:var(--success);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;">${_translations['gui_pd_allowed'] || 'Allowed'}</span>` : m.pd;
 
-            const formatLabel = (labels) => {
-              if (!labels || !labels.length) return '';
-              return labels.map(l => `<span style="background:#e1ecf4;color:#2c5e77;padding:1px 4px;border-radius:4px;font-size:9px;margin-right:2px;display:inline-block;white-space:nowrap;margin-top:2px;">${escapeHtml(l.key)}:${escapeHtml(l.value)}</span>`).join('');
-            };
-            const sLabels = formatLabel(m.s_labels);
-            const dLabels = formatLabel(m.d_labels);
+            const sLabels = renderLabelsHtml(m.s_labels);
+            const dLabels = renderLabelsHtml(m.d_labels);
 
             let isoBtn = '';
             if (m.s_href && m.d_href) {
@@ -1835,15 +2069,33 @@
               isoBtn = `<button class="btn btn-secondary btn-sm" onclick="openQuarantineModal('${m.s_href || m.d_href}')">Isolate</button>`;
             }
 
+            const formatActor = (name, ip, href, labelsHtml, process, user) => {
+              let procStr = '';
+              if (process || user) {
+                let p = process ? `<span style="color:var(--accent); font-weight:bold;"><i class="fas fa-microchip"></i> Process: ${escapeHtml(process)}</span>` : '';
+                let u = user ? `<span style="color:var(--accent2);"><i class="fas fa-user"></i> User: ${escapeHtml(user)}</span>` : '';
+                let sep = (p && u) ? '<br>' : '';
+                procStr = `<div style="font-size:10px; margin-top:4px;">${p}${sep}${u}</div>`;
+              }
+              let a = href ? `<a href="#" style="color:var(--text);font-weight:bold;font-size:11px;">${escapeHtml(name)}</a>` : `<strong style="font-size:11px;">${escapeHtml(name)}</strong>`;
+              return `${a}<br><small style="color:var(--dim);">${escapeHtml(ip)}</small>${procStr}<div style="margin-top:2px;">${labelsHtml}</div>`;
+            };
+
+            let svc_str = escapeHtml(m.svc);
+            if (m.svc.length > 25) {
+              let arr = m.svc.split(',').map(s => s.trim());
+              let encJson = encodeURIComponent(JSON.stringify(arr));
+              svc_str = `<span onclick="showCellPopover(event, 'SVC', JSON.parse(decodeURIComponent('${encJson}')))" style="cursor:pointer; border-bottom:1px dotted var(--dim); color:var(--accent);">${escapeHtml(m.svc.substring(0, 23))}...</span>`;
+            }
+
             html += `
           <tr>
             <td>${i + 1}</td>
             <td style="font-weight:bold;color:#6f42c1;">${m.val_fmt}</td>
-            <td style="font-size:10px;white-space:nowrap;">${m.first_seen}<br>${m.last_seen}</td>
-            <td style="text-align:center;">${m.dir}</td>
-            <td><strong style="font-size:11px;">${escapeHtml(m.s_name)}</strong><br><small style="color:var(--dim);">${escapeHtml(m.s_ip)}</small><br>${sLabels}</td>
-            <td><strong style="font-size:11px;">${escapeHtml(m.d_name)}</strong><br><small style="color:var(--dim);">${escapeHtml(m.d_ip)}</small><br>${dLabels}</td>
-            <td>${escapeHtml(m.svc)}</td>
+            <td style="font-size:10px;white-space:nowrap;">${formatDateZ(m.first_seen)}<br>${formatDateZ(m.last_seen)}</td>
+            <td>${formatActor(m.s_name, m.s_ip, m.s_href, sLabels, m.s_process, m.s_user)}</td>
+            <td>${formatActor(m.d_name, m.d_ip, m.d_href, dLabels, m.d_process, m.d_user)}</td>
+            <td>${svc_str}</td>
             <td>${pBadge}</td>
             <td>${isoBtn}</td>
           </tr>`;
@@ -2042,6 +2294,42 @@
     <div class="chk" style="margin-bottom:12px"><label><input type="checkbox" id="s-hc" ${st.enable_health_check !== false ? 'checked' : ''}> <span data-i18n="gui_enable_hc">Enable PCE Health Check</span></label></div>
     <div class="form-row">
       <div class="form-group">
+        <label data-i18n="gui_timezone">Timezone</label>
+        <select id="s-timezone" style="width:100%; padding:8px; border-radius:var(--radius); background:var(--bg3); border:1px solid var(--border); color:var(--fg);">
+          <option value="local" ${st.timezone === 'local' || !st.timezone ? 'selected' : ''}>Local Browser Time</option>
+          <option value="UTC" ${st.timezone === 'UTC' ? 'selected' : ''}>UTC</option>
+          <option value="UTC-12" ${st.timezone === 'UTC-12' ? 'selected' : ''}>UTC-12</option>
+          <option value="UTC-11" ${st.timezone === 'UTC-11' ? 'selected' : ''}>UTC-11</option>
+          <option value="UTC-10" ${st.timezone === 'UTC-10' ? 'selected' : ''}>UTC-10</option>
+          <option value="UTC-9" ${st.timezone === 'UTC-9' ? 'selected' : ''}>UTC-9</option>
+          <option value="UTC-8" ${st.timezone === 'UTC-8' ? 'selected' : ''}>UTC-8</option>
+          <option value="UTC-7" ${st.timezone === 'UTC-7' ? 'selected' : ''}>UTC-7</option>
+          <option value="UTC-6" ${st.timezone === 'UTC-6' ? 'selected' : ''}>UTC-6</option>
+          <option value="UTC-5" ${st.timezone === 'UTC-5' ? 'selected' : ''}>UTC-5</option>
+          <option value="UTC-4" ${st.timezone === 'UTC-4' ? 'selected' : ''}>UTC-4</option>
+          <option value="UTC-3" ${st.timezone === 'UTC-3' ? 'selected' : ''}>UTC-3</option>
+          <option value="UTC-2" ${st.timezone === 'UTC-2' ? 'selected' : ''}>UTC-2</option>
+          <option value="UTC-1" ${st.timezone === 'UTC-1' ? 'selected' : ''}>UTC-1</option>
+          <option value="UTC+1" ${st.timezone === 'UTC+1' ? 'selected' : ''}>UTC+1</option>
+          <option value="UTC+2" ${st.timezone === 'UTC+2' ? 'selected' : ''}>UTC+2</option>
+          <option value="UTC+3" ${st.timezone === 'UTC+3' ? 'selected' : ''}>UTC+3</option>
+          <option value="UTC+4" ${st.timezone === 'UTC+4' ? 'selected' : ''}>UTC+4</option>
+          <option value="UTC+5" ${st.timezone === 'UTC+5' ? 'selected' : ''}>UTC+5</option>
+          <option value="UTC+5.5" ${st.timezone === 'UTC+5.5' ? 'selected' : ''}>UTC+5.5</option>
+          <option value="UTC+6" ${st.timezone === 'UTC+6' ? 'selected' : ''}>UTC+6</option>
+          <option value="UTC+7" ${st.timezone === 'UTC+7' ? 'selected' : ''}>UTC+7</option>
+          <option value="UTC+8" ${st.timezone === 'UTC+8' ? 'selected' : ''}>UTC+8</option>
+          <option value="UTC+9" ${st.timezone === 'UTC+9' ? 'selected' : ''}>UTC+9</option>
+          <option value="UTC+9.5" ${st.timezone === 'UTC+9.5' ? 'selected' : ''}>UTC+9.5</option>
+          <option value="UTC+10" ${st.timezone === 'UTC+10' ? 'selected' : ''}>UTC+10</option>
+          <option value="UTC+11" ${st.timezone === 'UTC+11' ? 'selected' : ''}>UTC+11</option>
+          <option value="UTC+12" ${st.timezone === 'UTC+12' ? 'selected' : ''}>UTC+12</option>
+          <option value="UTC+13" ${st.timezone === 'UTC+13' ? 'selected' : ''}>UTC+13</option>
+          <option value="UTC+14" ${st.timezone === 'UTC+14' ? 'selected' : ''}>UTC+14</option>
+        </select>
+      </div>
+
+      <div class="form-group">
         <label data-i18n="gui_language">Language</label>
         <div class="radio-group">
           <label><input type="radio" name="s-lang" value="en" ${st.language !== 'zh_TW' ? 'checked' : ''}> <span data-i18n="gui_lang_en">English</span></label>
@@ -2062,14 +2350,19 @@
     async function saveSettings() {
       const active = []; if ($('s-amail').checked) active.push('mail'); if ($('s-aline').checked) active.push('line'); if ($('s-awh').checked) active.push('webhook');
       const theme = rv('s-theme');
+      const lang = rv('s-lang');
       document.documentElement.setAttribute('data-theme', theme);
       await post('/api/settings', {
         api: { url: $('s-url').value, org_id: $('s-org').value, key: $('s-key').value, secret: $('s-sec').value, verify_ssl: $('s-ssl').checked },
         email: { sender: $('s-sender').value, recipients: $('s-rcpt').value.split(',').map(s => s.trim()).filter(Boolean) },
         smtp: { host: $('s-smhost').value, port: parseInt($('s-smport').value) || 25, user: $('s-smuser').value, password: $('s-smpass').value, enable_tls: $('s-tls').checked, enable_auth: $('s-auth').checked },
         alerts: { active, line_channel_access_token: $('s-ltok').value, line_target_id: $('s-ltgt').value, webhook_url: $('s-whurl').value },
-        settings: { language: rv('s-lang'), theme: theme, enable_health_check: $('s-hc').checked }
+        settings: { language: lang, theme: theme, timezone: $('s-timezone').value, enable_health_check: $('s-hc').checked }
       });
+      await loadTranslations();
+      if (typeof renderQtPage === 'function') renderQtPage();
+      if (typeof renderQwPage === 'function') renderQwPage();
+      if (typeof renderDashboardQueries === 'function') renderDashboardQueries();
       toast('Settings saved');
     }
 
@@ -2234,7 +2527,7 @@
       const proto = document.getElementById('qt-proto').value;
 
       const bd = document.getElementById('qt-body');
-      bd.innerHTML = renderSkeletonRow(7);
+      bd.innerHTML = renderSkeletonRow(8);
       document.getElementById('qt-chkall').checked = false;
       updateBulkBar();
 
@@ -2264,75 +2557,130 @@
         const r = await post('/api/quarantine/search', payload);
 
         if (!r.ok || r.error) throw new Error(r.error || 'Server error');
-        if (!r.data || r.data.length === 0) {
-          bd.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--dim);">No anomalous traffic found matching criteria.</td></tr>`;
-          initTableResizers();
-          return;
+
+        // --- Pagination Logic ---
+        _qt_data = r.data || [];
+        _qt_page = 1;
+        renderQtPage();
+
+      } catch (err) {
+        bd.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--danger);">Error: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    let _qt_data = [];
+    let _qt_page = 1;
+
+    function renderQtPage() {
+      const bd = document.getElementById('qt-body');
+      const pageSize = parseInt(document.getElementById('qt-page-size').value);
+      const total = _qt_data.length;
+      const start = (_qt_page - 1) * pageSize;
+      const end = Math.min(start + pageSize, total);
+      const pageData = _qt_data.slice(start, end);
+
+      const pagBar = document.getElementById('qt-pagination');
+      const totalLabel = document.getElementById('qt-total-count');
+      const pageNumDisplay = document.getElementById('qt-page-num');
+
+      if (total > 0) {
+        pagBar.style.display = 'flex';
+        totalLabel.textContent = (_translations['gui_total_found'] || 'Total {count} records').replace('{count}', total);
+        pageNumDisplay.textContent = _qt_page;
+      } else {
+        pagBar.style.display = 'none';
+        bd.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--dim);">${_translations['gui_no_traffic'] || 'No anomalous traffic found matching criteria.'}</td></tr>`;
+        return;
+      }
+
+      let html = '';
+      pageData.forEach((item, idx) => {
+        let shref = item.source.href;
+        let dhref = item.destination.href;
+        let targetHref = shref || dhref || "";
+        let chkBox = targetHref ? `<input type="checkbox" class="qt-chk" value="${targetHref}">` : `<span style="color:var(--dim);font-size:10px;">${_translations['gui_management_unmanaged'] || 'Unmanaged'}</span>`;
+
+        const formatActor = (actor) => {
+          let procStr = '';
+          if (actor.process || actor.user) {
+            let p = actor.process ? `<span style="color:var(--accent); font-weight:bold;"><i class="fas fa-microchip"></i> Proc: ${escapeHtml(actor.process)}</span>` : '';
+            let u = actor.user ? `<span style="color:var(--accent2);"><i class="fas fa-user"></i> User: ${escapeHtml(actor.user)}</span>` : '';
+            let sep = (p && u) ? '<br>' : '';
+            procStr = `<div style="font-size:10px; margin-top:4px;">${p}${sep}${u}</div>`;
+          }
+          return `<strong style="font-size:11px;">${escapeHtml(actor.name)}</strong><br><small style="color:var(--dim);">${escapeHtml(actor.ip)}</small>${procStr}<div style="margin-top:2px;">${renderLabelsHtml(actor.labels)}</div>`;
+        };
+
+        const sort = document.getElementById('qt-sort').value;
+        let val_str = "";
+        if (sort === "bandwidth") val_str = item.formatted_bandwidth;
+        else if (sort === "volume") val_str = item.formatted_volume;
+        else val_str = item.formatted_connections + " " + (_translations['gui_flows'] || "flows");
+
+        let svc_str = "";
+        let name_part = item.service.name ? item.service.name + " " : "";
+        if (item.service.port !== "All") svc_str = `${name_part}${item.service.proto}/${item.service.port}`;
+        else svc_str = name_part ? `${name_part}${_translations['gui_all_services'] || "All Services"}` : (_translations['gui_all_services'] || "All Services");
+
+        if (svc_str.length > 25) {
+          let arr = svc_str.split(',').map(s => s.trim());
+          let encJson = encodeURIComponent(JSON.stringify(arr));
+          svc_str = `<span onclick="showCellPopover(event, 'SVC', JSON.parse(decodeURIComponent('${encJson}')))" style="cursor:pointer; border-bottom:1px dotted var(--dim); color:var(--accent);">${escapeHtml(svc_str.substring(0, 23))}...</span>`;
+        } else {
+          svc_str = escapeHtml(svc_str);
         }
 
-        let html = '';
-        r.data.forEach((item, idx) => {
-          // Attempt to extract Workload HREF from source or dest depending on context
-          let shref = item.source.href;
-          let dhref = item.destination.href;
+        const rawPd = item.policy_decision || '';
+        let pdBadge = '';
+        const pd_blocked = _translations['gui_pd_blocked'] || 'Blocked';
+        const pd_potential = _translations['gui_pd_potential'] || 'Potential';
+        const pd_allowed = _translations['gui_pd_allowed'] || 'Allowed';
 
-          // Checkbox value needs a reliable managed href. Prefer source if it exists, else target.
-          let targetHref = shref || dhref || "";
-          let chkBox = targetHref ? `<input type="checkbox" class="qt-chk" value="${targetHref}">` : `<span style="color:var(--dim);font-size:10px;">Unmanaged</span>`;
+        if (rawPd === 'blocked') pdBadge = `<span style="background:var(--danger);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;">${pd_blocked}</span>`;
+        else if (rawPd === 'potentially_blocked') pdBadge = `<span style="background:var(--warn);color:#000;padding:2px 6px;border-radius:4px;font-size:10px;">${pd_potential}</span>`;
+        else pdBadge = `<span style="background:var(--success);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;">${pd_allowed}</span>`;
 
-          const formatLabels = (labels) => {
-            if (!labels || !labels.length) return '';
-            return labels.map(l => {
-              let c = 'lbl';
-              if (l.key === 'Quarantine') c += ' lbl-quarantine';
-              return `<span class="${c}">${escapeHtml(l.key)}:${escapeHtml(l.value)}</span>`;
-            }).join('');
-          };
+        let isoBtn = '';
+        if (shref && dhref) isoBtn = `<button class="btn btn-secondary btn-sm" onclick="openQuarantineModal('${shref}', false, '${dhref}')">Isolate</button>`;
+        else if (shref || dhref) isoBtn = `<button class="btn btn-secondary btn-sm" onclick="openQuarantineModal('${shref || dhref}')">Isolate</button>`;
 
-          const badg = ""; // handled by service badge
+        let f_seen = item.timestamp_range ? item.timestamp_range.first_detected || "" : "";
+        let l_seen = item.timestamp_range ? item.timestamp_range.last_detected || "" : "";
+        if (f_seen) f_seen = formatDateZ(f_seen);
+        if (l_seen) l_seen = formatDateZ(l_seen);
 
-          let val_str = "";
-          if (sort === "bandwidth") val_str = item.formatted_bandwidth;
-          else if (sort === "volume") val_str = item.formatted_volume;
-          else val_str = item.formatted_connections + " flows";
+        html += `<tr>
+              <td style="text-align:center;">${chkBox}</td>
+              <td><div style="font-weight:bold;color:var(--accent2);">${val_str}</div></td>
+              <td style="font-size:10px;"><div style="color:var(--dim);">F: ${f_seen}</div><div style="color:var(--dim);">L: ${l_seen}</div></td>
+              <td>${formatActor(item.source)}</td>
+              <td>${formatActor(item.destination)}</td>
+              <td>${svc_str}</td>
+              <td>${pdBadge}</td>
+              <td>${isoBtn}</td>
+            </tr>`;
+      });
+      bd.innerHTML = html;
+      initTableResizers();
+    }
 
-          let svc_str = "";
-          if (item.service.port !== "All") {
-            svc_str = `${item.service.proto}/${item.service.port}`;
-          } else {
-            svc_str = "All Services";
-          }
-
-          const rawPd = item.policy_decision || '';
-          const pdBadge = (rawPd === 'blocked' || rawPd === 'potentially_blocked')
-            ? `<span style="background:var(--danger);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;">Blocked</span>`
-            : `<span style="background:var(--success);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;">Allowed</span>`;
-
-          let isoBtn = '';
-          if (shref && dhref) {
-            isoBtn = `<button class="btn btn-secondary btn-sm" onclick="openQuarantineModal('${shref}', false, '${dhref}')">Isolate</button>`;
-          } else if (shref || dhref) {
-            isoBtn = `<button class="btn btn-secondary btn-sm" onclick="openQuarantineModal('${shref || dhref}')">Isolate</button>`;
-          }
-
-          html += `<tr>
-                <td style="text-align:center;">${chkBox}</td>
-                <td>
-                    <div style="font-weight:bold;color:var(--accent2);">${val_str}</div>
-                    <div style="font-size:10px;color:var(--dim)">${item.total_connections} flows</div>
-                </td>
-                <td><strong style="font-size:11px;">${escapeHtml(item.source.name)}</strong><br><small style="color:var(--dim);">${escapeHtml(item.source.ip)}</small><br>${formatLabels(item.source.labels)}</td>
-                <td><strong style="font-size:11px;">${escapeHtml(item.destination.name)}</strong><br><small style="color:var(--dim);">${escapeHtml(item.destination.ip)}</small><br>${formatLabels(item.destination.labels)}</td>
-                <td>${escapeHtml(svc_str)}</td>
-                <td>${pdBadge}</td>
-                <td>${isoBtn}</td>
-             </tr>`;
-        });
-        bd.innerHTML = html;
-        initTableResizers();
-      } catch (e) {
-        bd.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--danger);">Error evaluating telemetry: ${e.message}</td></tr>`;
+    function qtNextPage() {
+      const pageSize = parseInt(document.getElementById('qt-page-size').value);
+      if (_qt_page * pageSize < _qt_data.length) {
+        _qt_page++;
+        renderQtPage();
       }
+    }
+
+    function qtPrevPage() {
+      if (_qt_page > 1) {
+        _qt_page--;
+        renderQtPage();
+      }
+    }
+
+    function openQtGuideModal() {
+      document.getElementById('modal-qt-guide').classList.add('show');
     }
 
     // --- Workload Search Endpoint ---
@@ -2352,63 +2700,98 @@
         const r = await fetch('/api/workloads?' + qp).then(res => res.json());
 
         if (!r.ok && r.error) throw new Error(r.error);
-        const list = r.data || [];
-        if (list.length === 0) {
-          bd.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--dim);">No workloads match current filters.</td></tr>`;
-          initTableResizers();
-          return;
+        _qw_data = r.data || [];
+        _qw_page = 1;
+        renderQwPage();
+
+      } catch (err) {
+        bd.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--danger);">Error: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    let _qw_data = [];
+    let _qw_page = 1;
+
+    function renderQwPage() {
+      const bd = document.getElementById('qw-body');
+      const pageSize = parseInt(document.getElementById('qw-page-size').value);
+      const total = _qw_data.length;
+      const start = (_qw_page - 1) * pageSize;
+      const end = Math.min(start + pageSize, total);
+      const pageData = _qw_data.slice(start, end);
+
+      const pagBar = document.getElementById('qw-pagination');
+      const totalLabel = document.getElementById('qw-total-count');
+      const pageNumDisplay = document.getElementById('qw-page-num');
+
+      if (total > 0) {
+        pagBar.style.display = 'flex';
+        totalLabel.textContent = (_translations['gui_total_found_ws'] || 'Total {count} workloads').replace('{count}', total);
+        pageNumDisplay.textContent = _qw_page;
+      } else {
+        pagBar.style.display = 'none';
+        bd.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--dim);" data-i18n="gui_ws_empty">${_translations['gui_ws_empty'] || 'Search by IP or Name to find workloads in the PCE.'}</td></tr>`;
+        return;
+      }
+
+      let html = '';
+      pageData.forEach((w) => {
+        const href = w.href;
+        const isOnline = w.online === true;
+        const statusText = isOnline ? (_translations['gui_status_online'] || 'Online') : (_translations['gui_status_offline'] || 'Offline');
+        const statusDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${isOnline ? 'var(--success)' : 'var(--warn)'};margin-right:6px;" title="${statusText}"></span>`;
+
+        let hasQuarantine = false;
+        if (w.labels) {
+          w.labels.forEach(l => {
+            if (l.key === 'Quarantine') hasQuarantine = true;
+          });
+        }
+        let labelsHtml = renderLabelsHtml(w.labels);
+
+        // Find IPv4 default interface IP
+        let ipStr = "";
+        if (w.interfaces && w.interfaces.length > 0) {
+          let intf = w.interfaces.find(i => i.address && i.address.includes('.'));
+          if (!intf) intf = w.interfaces.find(i => i.address) || w.interfaces[0];
+          ipStr = `${escapeHtml(intf.address)} <span style="font-size:10px;color:var(--dim)">(${escapeHtml(intf.name)})</span>`;
         }
 
-        let html = '';
-        list.forEach((w) => {
-          const href = w.href;
-          const isOnline = w.online === true;
-          const statusDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${isOnline ? 'var(--success)' : 'var(--warn)'};margin-right:6px;" title="${isOnline ? 'Online' : 'Offline'}"></span>`;
+        const mgmtText = w.managed ? (_translations['gui_management_managed'] || 'Managed') : (_translations['gui_management_unmanaged'] || 'Unmanaged');
 
-          let labelsHtml = '';
-          let hasQuarantine = false;
-          if (w.labels) {
-            w.labels.forEach(l => {
-              let c = 'lbl';
-              if (l.key === 'Quarantine') { c += ' lbl-quarantine'; hasQuarantine = true; }
-              labelsHtml += `<span class="${c}">${escapeHtml(l.key)}:${escapeHtml(l.value)}</span>`;
-            });
-          }
+        html += `<tr>
+              <td style="text-align:center;"><input type="checkbox" class="qw-chk" value="${href}"></td>
+              <td>
+                <div style="display:flex;align-items:center;">
+                  ${statusDot} <strong style="font-size:0.95rem;">${escapeHtml(w.name || w.hostname)}</strong>
+                </div>
+                <div style="font-size:10px;color:var(--dim);margin-top:2px;margin-left:14px;">${escapeHtml(w.hostname)}</div>
+              </td>
+              <td><span style="font-size:11px; color:${w.managed ? 'var(--success)' : 'var(--dim)'}">${mgmtText}</span></td>
+              <td>${ipStr}</td>
+              <td style="font-size:11px;">${labelsHtml || '<span style="color:var(--dim);font-size:10px;">No Labels</span>'}</td>
+              <td>
+                <button class="btn btn-secondary btn-sm" onclick="openQuarantineModal('${href}')">Isolate</button>
+                ${hasQuarantine ? `<span style="font-size:10px;color:var(--danger);font-weight:bold;margin-left:8px;">Isolated</span>` : ''}
+              </td>
+            </tr>`;
+      });
+      bd.innerHTML = html;
+      initTableResizers();
+    }
 
-          // Find IPv4 default interface IP
-          let ipStr = "";
-          if (w.interfaces && w.interfaces.length > 0) {
-            let intf = w.interfaces.find(i => i.address && i.address.includes('.'));
-            if (!intf) intf = w.interfaces.find(i => i.address) || w.interfaces[0];
-            ipStr = `${escapeHtml(intf.address)} <span style="font-size:10px;color:var(--dim)">(${escapeHtml(intf.name)})</span>`;
-          }
+    function qwNextPage() {
+      const pageSize = parseInt(document.getElementById('qw-page-size').value);
+      if (_qw_page * pageSize < _qw_data.length) {
+        _qw_page++;
+        renderQwPage();
+      }
+    }
 
-          let mgmtBadge = `<span style="font-size:10px;padding:2px 4px;border-radius:3px;background:var(--bg);border:1px solid var(--border);color:var(--dim);">Unmanaged</span>`;
-          if (w.agent && w.agent.status) {
-            mgmtBadge = `<span style="font-size:10px;padding:2px 4px;border-radius:3px;background:var(--success);color:#fff;">Managed</span>`;
-          }
-
-          html += `<tr>
-                <td style="text-align:center;"><input type="checkbox" class="qw-chk" value="${href}"></td>
-                <td>
-                    <div style="display:flex;align-items:center;">
-                        ${statusDot} <strong style="font-size:0.95rem;">${escapeHtml(w.name)}</strong>
-                    </div>
-                    <div style="font-size:10px;color:var(--dim);margin-top:2px;margin-left:14px;">${escapeHtml(w.hostname)}</div>
-                </td>
-                <td>${mgmtBadge}</td>
-                <td>${ipStr}</td>
-                <td>${labelsHtml || '<span style="color:var(--dim);font-size:10px;">No Labels</span>'}</td>
-                <td>
-                    <button class="btn btn-secondary btn-sm" onclick="openQuarantineModal('${href}')">Isolate</button>
-                    ${hasQuarantine ? `<span style="font-size:10px;color:var(--danger);font-weight:bold;margin-left:8px;">Isolated</span>` : ''}
-                </td>
-             </tr>`;
-        });
-        bd.innerHTML = html;
-        initTableResizers();
-      } catch (e) {
-        bd.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--danger);">Error searching PCE: ${e.message}</td></tr>`;
+    function qwPrevPage() {
+      if (_qw_page > 1) {
+        _qw_page--;
+        renderQwPage();
       }
     }
 
